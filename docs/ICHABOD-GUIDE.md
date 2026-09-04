@@ -7,6 +7,8 @@
 
 > Build one deliberately disposable machine where OpenClaw can plan, code, create agents, use Docker, publish websites, run recurring jobs, update its own Workboard, and communicate by email without routine approval. Keep AWS administration and personal accounts outside the box.
 
+**The design of record now lives in [docs/rfc/](rfc/README.md).** Five RFCs split this guide's design decisions into declarative documents — foundations, infrastructure, host and deployment, agent runtime, and autonomy and operations — so that GitHub issues can point at a design instead of restating it. This guide stays as the narrative walkthrough and still holds the Minesweeper example and the implementation sequence. Where the two disagree, the RFC wins.
+
 This is a personal autonomous lab, not a production platform. The main agent receives root-equivalent Docker access because that freedom is part of the experiment. The corresponding rule is simple: nothing on the machine should be irreplaceable or dangerous to lose.
 
 ## Table of contents
