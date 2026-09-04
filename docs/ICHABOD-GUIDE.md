@@ -7,6 +7,8 @@
 
 > Build one deliberately disposable machine where OpenClaw can plan, code, create agents, use Docker, publish websites, run recurring jobs, update its own Workboard, and communicate by email without routine approval. Keep AWS administration and personal accounts outside the box.
 
+**This guide explains the design. [SETUP-CHECKLIST.md](SETUP-CHECKLIST.md) is what you actually do.** Every task Zach has to physically perform lives there, in order, grouped into the six sections that become GitHub issues — including the full specification for the OpenTofu module, which Claude generates. This document keeps the reasoning, the configuration artifacts, and the procedures Ichabod follows on its own. Read a section here for why something is the way it is, then work from the checklist.
+
 This is a personal autonomous lab, not a production platform. The main agent receives root-equivalent Docker access because that freedom is part of the experiment. The corresponding rule is simple: nothing on the machine should be irreplaceable or dangerous to lose.
 
 ## Table of contents
@@ -25,7 +27,7 @@ This is a personal autonomous lab, not a production platform. The main agent rec
 12. [Persistent autonomy](#12-persistent-autonomy)
 13. [A complete Minesweeper example](#13-a-complete-minesweeper-example)
 14. [Operations, recovery, and success criteria](#14-operations-recovery-and-success-criteria)
-15. [Implementation sequence and references](#15-implementation-sequence-and-references)
+15. [References](#15-references)
 
 # 1. The machine
 
@@ -273,23 +275,9 @@ GitHub Actions and GHCR can be added if a second host, immutable registry artifa
 
 ### Giving Ichabod push access
 
-Generate the key on the box, as the `openclaw` user, so the private half never travels:
+The key is generated on the box, as the `openclaw` user, so the private half never travels. It is an account-level key on the **bot** account rather than a set of per-repository deploy keys, because Ichabod creates repositories on its own and a deploy key would have to be added to each one.
 
-```bash
-sudo -iu openclaw
-ssh-keygen -t ed25519 -C "ichabod@ichabod-crane.net" -f ~/.ssh/id_ed25519 -N ""
-cat ~/.ssh/id_ed25519.pub
-```
-
-Paste that public key into the **bot** account under Settings → SSH and GPG keys → New SSH key. Use an account-level key rather than per-repository deploy keys, because Ichabod creates repositories on its own and a deploy key would have to be added to each one. Then verify and set the commit identity:
-
-```bash
-ssh -T git@github.com
-git config --global user.name "Ichabod"
-git config --global user.email "ichabod@ichabod-crane.net"
-```
-
-This key is for `git push` only. Creating repositories and issues needs the API, so also run `gh auth login` as `openclaw` with a fine-grained token scoped to the bot account, and store that token as a SecretRef rather than leaving it in a shell history. Zach's personal GitHub keys never touch this machine.
+That key is for `git push` only. Creating repositories and issues needs the API, so `gh` is authenticated separately with a fine-grained token scoped to the bot account, stored as a SecretRef rather than left in a shell history. Zach's personal GitHub keys never touch this machine.
 
 ## Domain and wildcard DNS
 
@@ -320,13 +308,7 @@ The requirement is narrow: custom domain, real IMAP, real SMTP, and an app passw
 
 Fastmail is the safe default and Migadu the cheap one. See [Fastmail plans](https://www.fastmail.help/hc/en-us/articles/8033939068815-2024-pricing-and-plan-updates) and [server settings](https://www.fastmail.help/hc/en-us/articles/1500000278342-Server-names-and-ports).
 
-Setup, with any provider:
-
-1. Add `ichabod-crane.net` in the provider's domain screen.
-2. Copy its MX, SPF, DKIM, and DMARC records into the Route 53 hosted zone. They coexist with the apex and wildcard A records.
-3. Create `ichabod@ichabod-crane.net`.
-4. Create a dedicated app password for IMAP/SMTP.
-5. Send mail in both directions and inspect authentication results before connecting OpenClaw.
+Whichever provider is chosen, the domain is added there, its MX, SPF, DKIM, and DMARC records are copied into the Route 53 hosted zone alongside the apex and wildcard A records, and the mailbox gets a dedicated app password that a machine can use. Mail is proven in both directions, with the authentication results inspected, before OpenClaw is connected to it.
 
 Do not self-host mail on Ichabod merely to save a few dollars. Deliverability and reputation management are a separate project.
 
@@ -344,14 +326,7 @@ Use OpenClaw's shared secret store and SecretRefs:
 }
 ```
 
-Create protected entries through **Settings → Secrets** in the Control UI or with `openclaw secrets store`. Protected values are write-only through normal UI and RPC surfaces. After local CLI changes, reload the active snapshot:
-
-```bash
-openclaw secrets reload
-openclaw secrets audit --check
-```
-
-Migrate every supported plaintext credential until the audit is clean. Never paste secrets into this guide, Git, OpenTofu variables, cloud-init, Workboard cards, email, or agent prompts.
+Protected entries are created through **Settings → Secrets** in the Control UI or with `openclaw secrets store`, and protected values are write-only through normal UI and RPC surfaces. Local CLI changes need the active snapshot reloaded before the audit reflects them. Migrate every supported plaintext credential until that audit is clean. Never paste secrets into this guide, Git, OpenTofu variables, cloud-init, Workboard cards, email, or agent prompts.
 
 OpenClaw's store is not an HSM: values are stored in its local SQLite state and protected by filesystem permissions. SecretRefs reduce casual exposure in configuration, generated files, logs, and model context; they do not protect secrets from a root-equivalent host process. [OpenClaw secrets management](https://docs.openclaw.ai/gateway/secrets)
 
@@ -361,58 +336,25 @@ Do not attach an EC2 IAM role initially. Add a narrowly scoped role later only f
 
 # 5. OpenTofu blueprint
 
-OpenTofu provisions the machine and public network. Zach owns and applies it; Ichabod does not.
+OpenTofu provisions the machine and public network. Zach owns and applies it; Ichabod does not. This section is the reasoning behind the module — why the default VPC, why one IAM role, why no port 22. The module itself is generated from the specification in [the setup checklist](SETUP-CHECKLIST.md#1-accounts-domain-and-opentofu), which lists every file, variable, resource, and output it must contain.
 
 ## Compact repository
 
-```text
-tofu/
-├── main.tf
-├── variables.tf
-├── outputs.tf
-├── terraform.tfvars.example
-├── .gitignore
-└── .terraform.lock.hcl
-```
-
-The file names keep the `.tf`/`.tfvars`/`.tfstate` convention because OpenTofu reads exactly those. Keep state locally with backups for the pilot, or use an encrypted versioned S3 backend with state locking. Never commit `terraform.tfstate` or `terraform.tfvars`.
+Keep it to one small directory. The file names follow the `.tf`/`.tfvars`/`.tfstate` convention because OpenTofu reads exactly those. Keep state locally with backups for the pilot, or use an encrypted versioned S3 backend with state locking. Never commit `terraform.tfstate` or `terraform.tfvars`.
 
 ## Use the default VPC
 
 Yes, this can run entirely in the account's default VPC, and it should. A default VPC already has a public subnet in every availability zone, an Internet gateway, and a default route, and none of it costs anything. The parts of AWS networking that cost money — NAT gateways, VPC endpoints, extra Elastic IPs, Transit Gateway — are exactly the parts this design does not need, because the box only needs outbound Internet and inbound 80/443.
 
-So: no VPC resources in the module. Look up the default VPC and its subnets, and attach a dedicated security group so Ichabod's rules never sit on `default`:
-
-```hcl
-data "aws_vpc" "default" {
-  default = true
-}
-
-data "aws_subnets" "default" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.default.id]
-  }
-}
-```
+So: no VPC resources in the module. The default VPC and its subnets are looked up with data sources, and a dedicated security group is attached so Ichabod's rules never sit on `default`.
 
 The instance must sit in a public subnet with a public address (the Elastic IP), because the SSM agent, Let's Encrypt, Docker Hub, GitHub, and the Anthropic API are all reached outbound over the Internet gateway. Private subnets would require either a NAT gateway (~$33/month) or three interface VPC endpoints (~$22/month) — both are the "pay more for networking" outcome to avoid.
 
 ## Resources
 
-Create:
+The full resource list lives in [the setup checklist](SETUP-CHECKLIST.md#1-accounts-domain-and-opentofu). In outline it is a security group, the instance and its encrypted root volume, an IAM role and instance profile, an Elastic IP, the two Route 53 A records, budget alerts, and CloudWatch alarms with an SNS email topic (see [Alarms](#alarms)).
 
-- A security group in the default VPC.
-- One `t3a.large` Ubuntu 24.04 amd64 instance.
-- One encrypted 100 GiB gp3 root volume.
-- An IAM role and instance profile whose only policy is `AmazonSSMManagedInstanceCore`.
-- An Elastic IP.
-- Apex and wildcard Route 53 A records.
-- Budget alerts near the expected monthly spend.
-- CloudWatch alarms and an SNS email topic (see [Alarms](#alarms)).
-- Optional EBS snapshot policy.
-
-No SSH key pair, because there is no SSH. Use the current Canonical Ubuntu AMI for `us-west-2`, selected deliberately rather than copied from an old guide.
+No SSH key pair, because there is no SSH. The AMI is a current Canonical Ubuntu image for `us-west-2`, pinned deliberately rather than copied from an old guide or resolved to whatever is newest at apply time.
 
 ## The one IAM role
 
@@ -422,19 +364,7 @@ Add the CloudWatch agent policy alongside it only if metrics are published from 
 
 ## Important inputs
 
-```hcl
-variable "domain_name" {
-  type    = string
-  default = "ichabod-crane.net"
-}
-
-variable "alert_email" {
-  description = "Where budget and CloudWatch alarms are delivered"
-  type        = string
-}
-```
-
-There is no `admin_cidr` and no `key_name`. Access is an IAM question now, not a firewall question, so Zach can administer the box from a laptop, a phone tether, or a hotel network without reapplying anything.
+The module needs little: the domain name, the address where budget and CloudWatch alarms are delivered, and the pinned AMI. There is no `admin_cidr` and no `key_name`. Access is an IAM question now, not a firewall question, so Zach can administer the box from a laptop, a phone tether, or a hotel network without reapplying anything.
 
 ## Network policy
 
@@ -451,130 +381,37 @@ Inbound port 22 is not open, to anyone, ever. SSM works over the instance's *out
 
 ## Instance settings
 
-The high-value portion of the EC2 resource is:
-
-```hcl
-instance_type                   = "t3a.large"
-associate_public_ip_address     = false
-disable_api_termination         = true
-iam_instance_profile            = aws_iam_instance_profile.ichabod.name
-
-credit_specification {
-  cpu_credits = "standard"
-}
-
-metadata_options {
-  http_endpoint               = "enabled"
-  http_tokens                 = "required"
-  http_put_response_hop_limit = 1
-}
-
-root_block_device {
-  volume_type           = "gp3"
-  volume_size           = 100
-  encrypted             = true
-  delete_on_termination = true
-}
-```
+The settings that carry weight are the instance type, termination protection, the instance profile, `standard` CPU credits for a predictable ceiling, IMDSv2 required with a hop limit of one, and an encrypted gp3 root volume. The exact arguments are in the checklist specification.
 
 Associate the Elastic IP separately. A stopped instance retains the address, and the address can move to a replacement instance.
 
 Ubuntu 24.04 AMIs ship the SSM agent preinstalled and enabled, so no user data is required to make the instance manageable. Confirm it registered before assuming so.
 
-This guide intentionally omits complete provider, alarm, and budget resources. They are ordinary HCL and consume many printed pages. The design constraints above matter more than one generated implementation. Use the current [AWS provider documentation](https://registry.terraform.io/providers/hashicorp/aws/latest/docs) while writing the module.
+The design constraints above matter more than any one generated implementation, which is why they are written down separately from the HCL. Whoever writes the module — and here that is Claude — should work from the current [AWS provider documentation](https://registry.terraform.io/providers/hashicorp/aws/latest/docs) rather than from memory.
 
-Route 53 is authoritative, so create:
-
-```text
-ichabod-crane.net      A  <Elastic IP>
-*.ichabod-crane.net    A  <Elastic IP>
-```
-
-The wildcard does not cover the apex, so both records are required.
+Route 53 is authoritative, so the zone carries an apex A record and a wildcard A record, both pointing at the Elastic IP. The wildcard does not cover the apex, so both are required.
 
 ## Apply and verify
 
-From Zach's workstation:
-
-```bash
-tofu init
-tofu fmt -check
-tofu validate
-tofu plan
-tofu apply
-```
-
-Before continuing, verify:
-
-- A second plan is empty.
-- The instance appears in `aws ssm describe-instance-information`.
-- `make shell` (see [section 7](#7-private-administration-with-aws-ssm)) opens a session.
-- Port 22 is closed from everywhere.
-- Ports 80 and 443 are reachable.
-- Ports 18789, 2375, and 2376 are not public.
-- The apex and a random wildcard hostname resolve to the Elastic IP.
-- The root volume is encrypted.
-- No credential appears in state, variables, user data, outputs, or Git.
-- Budget notifications reach Zach.
+Zach applies from his own workstation, and nothing continues until the plan is clean and the box answers on SSM. The verification list is in [the setup checklist](SETUP-CHECKLIST.md#1-accounts-domain-and-opentofu).
 
 # 6. Provision and secure the host
 
-Open a shell with SSM (`make shell`, defined in [section 7](#7-private-administration-with-aws-ssm)). No host key, no private key, no bastion.
+Administration starts with `make shell` (defined in [section 7](#7-private-administration-with-aws-ssm)). No host key, no private key, no bastion. The steps this section explains are listed in order in [the setup checklist](SETUP-CHECKLIST.md#2-host-docker-and-traefik).
 
-SSM drops you in as `ssm-user`, a service-managed account with passwordless sudo — which answers a question the earlier draft left open: **there is no `ubuntu` user in this workflow.** `ubuntu` is just the default login Canonical bakes into its AMIs for SSH, and with SSH gone it is vestigial. The two accounts that matter are `ssm-user` for administration and `openclaw` for everything Ichabod does:
-
-```bash
-sudo -iu openclaw     # become Ichabod's service account
-```
-
-Every command below that touches OpenClaw, Claude, or Docker assumes you are in that `openclaw` shell.
+SSM drops you in as `ssm-user`, a service-managed account with passwordless sudo — which answers a question the earlier draft left open: **there is no `ubuntu` user in this workflow.** `ubuntu` is just the default login Canonical bakes into its AMIs for SSH, and with SSH gone it is vestigial. The two accounts that matter are `ssm-user` for administration and `openclaw` for everything Ichabod does. Everything touching OpenClaw, Claude, or Docker happens in that `openclaw` shell.
 
 ## Patch and install baseline tools
 
-```bash
-sudo apt-get update
-sudo apt-get upgrade -y
-sudo apt-get install -y ca-certificates curl git jq unzip build-essential
-sudo reboot
-```
-
-Reconnect and create the service account and working directories:
-
-```bash
-sudo useradd --create-home --shell /bin/bash openclaw
-sudo install -d -o openclaw -g openclaw /srv/ichabod
-sudo -u openclaw mkdir -p \
-  /srv/ichabod/apps \
-  /srv/ichabod/platform \
-  /srv/ichabod/backups \
-  /srv/ichabod/templates
-sudo loginctl enable-linger openclaw
-```
+Patch Ubuntu, install the ordinary build and network tools, and reboot. Then create the `openclaw` service account, `/srv/ichabod` and its four working directories, and enable linger so the user's services survive logout.
 
 ## Install Docker
 
-Use Docker's current Ubuntu installation instructions. For a disposable lab, its official convenience installer is a reasonable shortcut:
+Use Docker's current Ubuntu installation instructions. For a disposable lab, its official convenience installer is a reasonable shortcut, provided the script is inspected before it runs and removed afterward. The `openclaw` user joins the `docker` group, and the login session has to be re-entered before that group applies.
 
-```bash
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
-sudo systemctl enable --now docker
-sudo usermod -aG docker openclaw
-```
+Verifying with `docker run --rm hello-world` as `openclaw` is not a formality. It is the test that confirms the intended root-equivalent authority.
 
-Inspect the downloaded script before executing it if you prefer. Remove it afterward. Re-enter the `openclaw` login session so the new group applies, then verify:
-
-```bash
-sudo -iu openclaw
-docker version
-docker compose version
-docker run --rm hello-world
-exit
-```
-
-This test confirms the intended root-equivalent authority.
-
-Configure Docker log rotation in `/etc/docker/daemon.json`:
+Docker log rotation belongs in `/etc/docker/daemon.json`:
 
 ```json
 {
@@ -586,37 +423,13 @@ Configure Docker log rotation in `/etc/docker/daemon.json`:
 }
 ```
 
-Restart Docker once, before applications exist:
-
-```bash
-sudo systemctl restart docker
-```
+Restart Docker once for that to take effect, before any application exists.
 
 ## Swap and basic host policy
 
-If `swapon --show` is empty, create a 4 GiB swap file:
+A 4 GiB swap file, added to `/etc/fstab` so it survives reboot, is an OOM fuse rather than extra working memory.
 
-```bash
-sudo fallocate -l 4G /swapfile
-sudo chmod 600 /swapfile
-sudo mkswap /swapfile
-sudo swapon /swapfile
-echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
-```
-
-Swap is an OOM fuse, not extra working memory.
-
-There is no sshd configuration to harden, because the security group never admits port 22. If you want the daemon gone entirely rather than merely unreachable:
-
-```bash
-sudo systemctl disable --now ssh
-```
-
-Leave it installed but disabled; reinstating it from an SSM session is easy, and Git's SSH client is a separate binary that keeps working either way. Confirm the SSM agent is healthy before relying on it as the only door:
-
-```bash
-sudo systemctl status amazon-ssm-agent
-```
+There is no sshd configuration to harden, because the security group never admits port 22. The daemon can be disabled outright rather than merely left unreachable. Leave it installed but disabled; reinstating it from an SSM session is easy, and Git's SSH client is a separate binary that keeps working either way. Confirm the SSM agent is healthy before relying on it as the only door.
 
 ## Disk housekeeping
 
@@ -657,15 +470,7 @@ The Gateway is required; public Gateway access is not. Keep it bound to loopback
 
 Nothing reaches that port from the network. Administration goes through AWS Systems Manager Session Manager instead: the instance holds an outbound connection to the SSM service, and `aws ssm start-session` meets it there. That gives a shell and port forwarding with no inbound port, no key pair, and no IP allowlist — authorization is IAM, so it works from anywhere Zach is logged into the AWS CLI.
 
-One-time setup on the laptop:
-
-```bash
-brew install --cask session-manager-plugin
-aws ssm describe-instance-information \
-  --query "InstanceInformationList[].[InstanceId,PingStatus]" --output table
-```
-
-If the instance is not listed as `Online`, the instance profile or its outbound Internet path is wrong; fix that before anything else, because it is now the only way in.
+The laptop needs the Session Manager plugin installed once. If the instance does not then list as `Online`, the instance profile or its outbound Internet path is wrong; fix that before anything else, because it is now the only way in.
 
 ## The Makefile
 
@@ -700,35 +505,11 @@ status:
 
 ## Open the Control UI
 
-```bash
-make ui
-```
-
-Leave that terminal open and browse to:
-
-```text
-http://127.0.0.1:18789/
-```
-
-The SSM tunnel protects the network path, and OpenClaw's own token/password and browser pairing still apply. This is the same shape as the SSH tunnel in OpenClaw's docs, with SSM carrying the forward. See [OpenClaw remote access](https://docs.openclaw.ai/gateway/remote).
+`make ui` opens the forward. Leave that terminal open and browse to `http://127.0.0.1:18789/`. The SSM tunnel protects the network path, and OpenClaw's own token/password and browser pairing still apply. This is the same shape as the SSH tunnel in OpenClaw's docs, with SSM carrying the forward. See [OpenClaw remote access](https://docs.openclaw.ai/gateway/remote).
 
 ## Text-only access
 
-A session reaches the host, not a model session. After connecting:
-
-```bash
-make openclaw
-openclaw tui
-```
-
-The TUI then connects to the Gateway and its sessions. Useful host-side commands include:
-
-```bash
-openclaw status --deep
-openclaw gateway status
-openclaw workboard list
-openclaw logs --follow
-```
+A session reaches the host, not a model session. `make openclaw` lands in the service account, and `openclaw tui` from there connects to the Gateway and its sessions. `openclaw status --deep`, `gateway status`, `workboard list`, and `logs --follow` are the useful host-side commands while troubleshooting.
 
 Session Manager can log every session to S3 or CloudWatch Logs — worth enabling later so administrative access to a root-equivalent box is auditable.
 
@@ -744,47 +525,13 @@ Install OpenClaw on the host rather than inside one of the applications it will 
 
 So the `claude` TUI is never invoked in normal operation. You will run `claude` interactively exactly twice: once to log in, and again if you ever want to debug the harness by hand. Ichabod's own text interface is `openclaw tui`. [CLI backends](https://docs.openclaw.ai/gateway/cli-backends)
 
-Enter the service account:
+Claude Code is installed as the `openclaw` user with Anthropic's current native installer, and the login is completed in Zach's browser using Ichabod's dedicated Claude account. Do not log in as root and do not copy Zach's personal Claude state into this account.
 
-```bash
-sudo -iu openclaw
-```
-
-Install Claude Code using Anthropic's current native installer:
-
-```bash
-curl -fsSL https://claude.ai/install.sh | bash
-claude --version
-claude auth login
-claude auth status --text
-```
-
-Complete the login in Zach's browser using Ichabod's dedicated Claude account. Do not log in as root and do not copy Zach's personal Claude state into this account.
-
-Record where the executable was installed:
-
-```bash
-command -v claude
-```
-
-The Gateway's systemd service must include that directory in its `PATH`.
+Record where the executable landed. The Gateway's systemd service must include that directory in its `PATH`.
 
 ## OpenClaw
 
-Follow the [current OpenClaw installation guide](https://docs.openclaw.ai/install). The official installer is:
-
-```bash
-curl -fsSL https://openclaw.ai/install.sh | bash
-```
-
-To separate installation from onboarding:
-
-```bash
-curl -fsSL https://openclaw.ai/install.sh | bash -s -- --no-onboard
-openclaw onboard --install-daemon
-```
-
-During onboarding:
+Follow the [current OpenClaw installation guide](https://docs.openclaw.ai/install). Installing with onboarding deferred, then onboarding separately with the daemon installed, keeps the two decisions apart and makes the second one reviewable. During onboarding:
 
 - Use the Claude CLI runtime backed by the dedicated subscription.
 - Select a model that `openclaw models list --provider anthropic` reports as available.
@@ -794,62 +541,17 @@ During onboarding:
 - Do not enable Tailscale Serve or Funnel.
 - Do not add an Anthropic API key as an unplanned fallback.
 
-Confirm model access:
-
-```bash
-openclaw models auth login --provider anthropic --method cli --set-default
-openclaw models list --provider anthropic
-openclaw models status
-```
-
-The available model and subscription allowance can change. Treat the output of the installed tools and the account's usage page as authoritative.
+Confirm model access afterward with `openclaw models list` and `models status`. The available model and subscription allowance can change. Treat the output of the installed tools and the account's usage page as authoritative.
 
 ## Managed service and loopback binding
 
 Two jobs here. First, make the Gateway a systemd user service so it starts on boot and keeps running when nobody is logged in — otherwise Ichabod stops existing the moment an administrative session closes. Second, pin its listener to `127.0.0.1` so the only path to it is the SSM port forward from [section 7](#7-private-administration-with-aws-ssm).
 
-Enable linger so the user service survives logout:
+Linger has to be enabled so the user service survives logout. The Gateway is then installed as a managed service and its bind set to loopback.
 
-```bash
-sudo loginctl enable-linger openclaw
-```
+Verify the listener with `ss -lntp | grep 18789`. Accept `127.0.0.1:18789`. Do not accept `0.0.0.0:18789` or the instance's public address.
 
-As `openclaw`:
-
-```bash
-openclaw gateway install
-openclaw config set gateway.bind loopback
-openclaw gateway restart
-openclaw gateway status
-```
-
-Verify the listener:
-
-```bash
-ss -lntp | grep 18789
-```
-
-Accept `127.0.0.1:18789`. Do not accept `0.0.0.0:18789` or the instance's public address.
-
-If systemd cannot find Claude, add a user-service drop-in:
-
-```bash
-systemctl --user edit openclaw-gateway.service
-```
-
-Use the actual directory returned by `command -v claude`:
-
-```ini
-[Service]
-Environment=PATH=/home/openclaw/.local/bin:/usr/local/bin:/usr/bin:/bin
-```
-
-Then reload and restart:
-
-```bash
-systemctl --user daemon-reload
-openclaw gateway restart
-```
+If systemd cannot find Claude, a user-service drop-in on `openclaw-gateway.service` setting `PATH` to include the directory Claude was installed into fixes it.
 
 ## Deliberately enable full host execution
 
@@ -861,54 +563,19 @@ The main agent is intentionally unsandboxed. All of this lives in `/home/opencla
 - Ask/reviewer behavior: off.
 - Session permission mode: `full`.
 
-For releases supporting the documented CLI settings:
-
-```bash
-openclaw config set tools.exec.host gateway
-openclaw config set tools.exec.mode full
-openclaw exec-policy preset yolo
-openclaw gateway restart
-```
-
-Configuration names can evolve. Inspect the effective result rather than trusting the commands blindly:
-
-```bash
-openclaw sandbox explain --agent main
-openclaw exec-policy show
-openclaw security audit --deep
-```
+Configuration names can evolve, so inspect the effective result — `sandbox explain --agent main`, `exec-policy show`, `security audit --deep` — rather than trusting any one command sequence blindly.
 
 The intended result is that `main` executes as the `openclaw` host user and can use Docker without prompting Zach. The `mail_reader` configured later must remain separately sandboxed and restricted.
 
-Test the complete authority path from a main-agent session:
-
-1. Create a temporary directory under `/srv/ichabod/apps`.
-2. Run a harmless host command.
-3. Build a tiny Docker image.
-4. Start and remove its container.
-5. Confirm no approval prompt appeared.
+The complete authority path is tested from a main-agent session: a temporary directory under `/srv/ichabod/apps`, a harmless host command, a tiny Docker image built, its container started and removed, and no approval prompt anywhere in it.
 
 If an approval appears, diagnose session permission, tool policy, and exec policy. Do not compensate by exposing the Gateway.
 
 ## Baseline checks
 
-```bash
-openclaw --version
-openclaw doctor
-openclaw status --deep
-openclaw health --verbose
-openclaw models status
-claude auth status --text
-openclaw security audit --deep
-```
+`openclaw doctor`, `status --deep`, `health --verbose`, `models status`, and `security audit --deep` are the standing health checks, and they are worth running before and after every change to this layer.
 
-Reboot the host once and confirm:
-
-- Docker returns.
-- Traefik returns after it is installed.
-- The OpenClaw user service returns without login.
-- Claude authentication remains valid.
-- `make ui` can reopen the Control UI.
+Then reboot the host once. Docker, Traefik, the Gateway user service, Claude's authentication, and `make ui` must all come back without a login.
 
 # 9. Identity, agents, and Workboard
 
@@ -1111,14 +778,7 @@ That shape is deliberate. `scout` proposes; `main` decides and executes. An idea
 
 ## Workboard
 
-Workboard is the only board in this design. It is bundled with OpenClaw but disabled by default:
-
-```bash
-openclaw plugins enable workboard
-openclaw gateway restart
-```
-
-Run `make ui`, browse to the Control UI, and select **Workboard**, or open `/workboard`. It is an authenticated private interface, not a public board. That is acceptable here: email remains the everyday interface and Workboard is the cockpit.
+Workboard is the only board in this design. It is bundled with OpenClaw but disabled by default, so it has to be enabled explicitly and the Gateway restarted. It then appears in the Control UI under **Workboard**, or at `/workboard`. It is an authenticated private interface, not a public board. That is acceptable here: email remains the everyday interface and Workboard is the cockpit.
 
 ### A public read-only mirror
 
@@ -1173,14 +833,7 @@ Every executable card should contain:
 
 For the `t3a.large` pilot, keep only one build/browser-heavy card running at a time even though Workboard can dispatch more. Increase concurrency only after observing memory, swap, CPU credits, and disk behavior.
 
-Useful CLI commands:
-
-```bash
-openclaw workboard list
-openclaw workboard dispatch
-```
-
-The UI is the easier way to learn the board. The CLI is primarily useful while troubleshooting from an SSM session.
+The UI is the easier way to learn the board. `openclaw workboard list` and `dispatch` are primarily useful while troubleshooting from an SSM session.
 
 # 10. Direct Docker deployment with Traefik
 
@@ -1232,16 +885,7 @@ volumes:
   letsencrypt:
 ```
 
-Then:
-
-```bash
-cd /srv/ichabod/platform/traefik
-docker compose config
-docker compose up -d
-docker compose logs --tail=100
-```
-
-ACME (Automatic Certificate Management Environment) is the protocol Let's Encrypt uses to issue certificates without a human. The `httpchallenge` lines above select HTTP-01: to prove Ichabod controls `minesweeper.ichabod-crane.net`, Traefik serves a token at `http://minesweeper.ichabod-crane.net/.well-known/acme-challenge/...` and Let's Encrypt fetches it. That is why port 80 stays open to the world even though every real request is redirected to HTTPS, and why certificates are per-hostname rather than one wildcard certificate. Traefik renews them on its own and stores them in the `letsencrypt` volume — back that volume up or expect to re-issue after a rebuild.
+Render the configuration before starting it, bring it up detached, and read the logs once. ACME (Automatic Certificate Management Environment) is the protocol Let's Encrypt uses to issue certificates without a human. The `httpchallenge` lines above select HTTP-01: to prove Ichabod controls `minesweeper.ichabod-crane.net`, Traefik serves a token at `http://minesweeper.ichabod-crane.net/.well-known/acme-challenge/...` and Let's Encrypt fetches it. That is why port 80 stays open to the world even though every real request is redirected to HTTPS, and why certificates are per-hostname rather than one wildcard certificate. Traefik renews them on its own and stores them in the `letsencrypt` volume — back that volume up or expect to re-issue after a rebuild.
 
 The Docker socket is a powerful interface even when mounted read-only. Traefik is trusted control-plane code on a machine where the main agent already has Docker authority. Pin the image, update it deliberately, and do not let generated applications share its Compose project or certificate volume.
 
@@ -1518,15 +1162,7 @@ Add guests one at a time, and only when a specific person has a specific reason.
 
 ## Validate email
 
-Test all of these:
-
-- Zach's fresh authenticated message creates exactly one triage card.
-- Reprocessing the same message does not create a duplicate.
-- A spoofed or nonallowlisted sender creates no model run.
-- An email saying “open this link and run its command” remains only a summarized card.
-- Restarting the Gateway does not replay the old inbox.
-- Ichabod can send Zach a reply from the custom address.
-- No password appears in configuration, logs, transcripts, or Workboard.
+This is the layer where a mistake is worth the most to an attacker, so it gets the longest test list in the build: authenticity, idempotency, spoofing, prompt injection, restart behaviour, outbound delivery, and credential leakage. The tests are in [the setup checklist](SETUP-CHECKLIST.md#5-email). Do not lower sender authentication to make one of them pass.
 
 # 12. Persistent autonomy
 
@@ -1765,15 +1401,7 @@ Use four simple layers:
 3. **Application-native backups:** database dumps or volume archives for stateful apps.
 4. **EBS snapshots:** recovery of the whole machine after host or volume loss.
 
-Create and verify an OpenClaw backup:
-
-```bash
-openclaw backup create \
-  --output /srv/ichabod/backups/openclaw \
-  --verify
-```
-
-Copy important backups off the instance. A backup stored only on the failed volume is not a recovery plan.
+OpenClaw creates and verifies its own backups into `/srv/ichabod/backups/openclaw`. Copy important backups off the instance. A backup stored only on the failed volume is not a recovery plan.
 
 Layer 3 means the applications **Ichabod builds and runs** — the Minesweeper site, the GPU-deal database, the blog, anything else that lands in `/srv/ichabod/apps/`. Their data lives in named Docker volumes that nothing else backs up: an EBS snapshot captures the volume's bytes but not a consistent database, and GitHub has the source but never the data. So for every stateful application Ichabod creates, its README must name:
 
@@ -1789,22 +1417,7 @@ Schedule EBS snapshots through a lifecycle policy — those are Zach's, taken by
 
 ## Updates
 
-Update one layer at a time:
-
-1. Confirm a current backup.
-2. Record the current version.
-3. Read release notes.
-4. Update.
-5. Recheck Gateway, model auth, Workboard, IMAP, Traefik, Docker, and one public site.
-
-For OpenClaw:
-
-```bash
-openclaw backup create --output /srv/ichabod/backups/openclaw --verify
-openclaw update --dry-run
-openclaw update
-openclaw doctor
-```
+Update one layer at a time, and never without a current verified backup, a record of the version being left behind, and the release notes actually read. Afterward recheck the Gateway, model auth, Workboard, IMAP, Traefik, Docker, and one public site. OpenClaw's own updater has a dry run; use it. The full procedure is in [the setup checklist](SETUP-CHECKLIST.md#ongoing-not-an-issue).
 
 Pin Traefik and application base images. Let Ichabod propose or perform ordinary project dependency updates, but treat OpenClaw, Docker, the SSM agent, and Traefik as the workshop machinery and update them deliberately.
 
@@ -1851,107 +1464,15 @@ Stopping EC2 does not stop EBS, snapshot, Elastic IP, domain, or other noncomput
 
 ## Completion criteria
 
-Infrastructure:
-
-- [ ] The instance is `t3a.large` or an intentionally chosen local equivalent.
-- [ ] Disk is encrypted, budget alerts work, and 80/443 are the only inbound ports.
-- [ ] Port 22 is closed and administration works only through SSM.
-- [ ] Gateway 18789 and Docker API ports are not public.
-- [ ] Apex and wildcard DNS resolve correctly.
-
-Control plane:
-
-- [ ] The Gateway is loopback-only and returns after reboot.
-- [ ] Zach can reach the Control UI and Workboard through the documented SSM port forward.
-- [ ] Claude uses the dedicated subscription and has no unintended metered-key fallback.
-- [ ] Workboard survives reboot and shows linked execution history.
-- [ ] OpenClaw's secret audit reports no supported plaintext credential residue.
-
-Autonomy:
-
-- [ ] `main` runs host commands and Docker without routine approvals.
-- [ ] `main` can create a durable agent without Zach approving the operation.
-- [ ] `mail_reader` cannot use shell, files, web, browser, Docker, or automations.
-- [ ] An authenticated Zach email creates exactly one Workboard card.
-- [ ] A spoofed or malicious email fails the intake tests.
-- [ ] Ichabod can send Zach email without a routine approval.
-- [ ] Scheduled work survives Gateway and host restart.
-
-Deployment:
-
-- [ ] Traefik returns after reboot and owns only public ports 80/443.
-- [ ] Two hostnames route to two different Compose services.
-- [ ] A new labeled application receives valid HTTPS without a DNS edit.
-- [ ] Containers have health, resource, restart, PID, and log limits.
-- [ ] Useful source is committed and pushed privately.
-- [ ] One request travels from email to tested public site without Zach opening a session.
-
-Recovery:
-
-- [ ] An OpenClaw backup verifies and exists off-host.
-- [ ] At least one application backup has been restored successfully.
-- [ ] A current EBS snapshot exists.
-- [ ] Zach can disable ingestion, stop the Gateway, stop an app, revoke credentials, and stop EC2.
+The system is finished when infrastructure, control plane, autonomy, deployment, and recovery each hold up under inspection. Those criteria are the **Verify** block at the end of every section of [the setup checklist](SETUP-CHECKLIST.md), so that each one is checked at the moment it becomes true rather than in one audit at the end.
 
 The human acceptance test is simple:
 
 > Email Ichabod a small website idea. Later receive a working HTTPS link, a short explanation, source history, test evidence, and no hidden infrastructure surprise.
 
-# 15. Implementation sequence and references
+# 15. References
 
-Build the system in six sessions. Stop when each session's verification works.
-
-## Session 1 — accounts, domain, and OpenTofu
-
-- Create the dedicated AWS, Claude, GitHub, and email identities.
-- Register `ichabod-crane.net` and point it at Route 53.
-- Write the compact OpenTofu module against the default VPC.
-- Apply EC2, Elastic IP, security group, SSM instance profile, wildcard DNS, budget alerts, and CloudWatch alarms.
-- Verify SSM access and that port 22 is closed.
-
-## Session 2 — host, Docker, and Traefik
-
-- Patch Ubuntu and write the admin Makefile.
-- Create `openclaw` and `/srv/ichabod`.
-- Install Docker and grant the service user access.
-- Configure swap and log rotation.
-- Start standalone Traefik.
-- Manually deploy two tiny labeled test sites.
-
-## Session 3 — Claude and OpenClaw
-
-- Authenticate Claude Code as `openclaw`.
-- Install and onboard OpenClaw.
-- Keep the Gateway loopback-only.
-- Prove the SSM port forward and browser pairing.
-- Enable `full`-mode host execution.
-- Reboot and rerun health checks.
-
-## Session 4 — identity, agents, and Workboard
-
-- Write compact workspace identity files.
-- Keep critical policy in `AGENTS.md` and create the agent template.
-- Configure `main` and sandboxed `mail_reader`.
-- Enable Workboard.
-- Test direct Docker from `main`.
-- Test temporary and durable agent creation.
-
-## Session 5 — email
-
-- Finish MX, SPF, DKIM, and DMARC.
-- Store IMAP and SMTP credentials with SecretRefs.
-- Configure the reader and idempotent triage-card instructions.
-- Configure outbound SMTP.
-- Run the spoofing, prompt-injection, duplicate, restart, and reply tests.
-
-## Session 6 — autonomy and recovery
-
-- Create director, scout, and digest automations.
-- Complete Minesweeper through the email-to-site path.
-- Enable a GPU-deal or similar persistent monitor.
-- Produce one timeboxed Wild Work project.
-- Configure off-host backups and EBS snapshots.
-- Reboot, restore one backup, and rehearse the kill switches.
+The build order — six sessions, each stopping at a verification that has to pass before the next begins — is [the setup checklist](SETUP-CHECKLIST.md). It is the source of truth for what Zach has to do and in what order, and each of its sections becomes one GitHub issue.
 
 ## Primary references
 
