@@ -29,18 +29,84 @@ Reference: guide sections [3](ICHABOD-GUIDE.md#3-where-to-run-it-and-what-it-cos
 
 **OpenTofu module**
 
-- [ ] Write the module: `main.tf`, `variables.tf`, `outputs.tf`, `terraform.tfvars.example`, `.gitignore`. Never commit `terraform.tfstate` or `terraform.tfvars`.
-- [ ] Look up the default VPC and its subnets with data sources. Create no VPC resources.
-- [ ] Define a dedicated security group admitting only 80 and 443 from `0.0.0.0/0`. No port 22 rule, no `admin_cidr`, no `key_name`.
-- [ ] Define the `t3a.large` instance on a current Canonical Ubuntu 24.04 amd64 AMI, with `cpu_credits = "standard"`, `disable_api_termination`, and IMDSv2 required.
-- [ ] Define the encrypted 100 GiB gp3 root volume.
-- [ ] Define the IAM role and instance profile whose only policy is `AmazonSSMManagedInstanceCore`. Add the CloudWatch agent policy only if metrics are published from the host. Nothing else goes on this role.
-- [ ] Define the Elastic IP and associate it separately from the instance.
-- [ ] Define the apex and wildcard A records. Both are required — the wildcard does not cover the apex.
-- [ ] Define budget alerts near the expected monthly spend, with SNS to Zach's real email.
-- [ ] Define CloudWatch alarms on `StatusCheckFailed`, `CPUCreditBalance`, and `EBSByteBalance`.
-- [ ] Optionally define an EBS snapshot lifecycle policy.
-- [ ] Run `tofu init`, `fmt -check`, `validate`, `plan`, `apply`.
+This module is the one piece Claude generates. Zach reviews and applies it. The specification below is deliberately complete, so generation is deterministic and review is a matter of checking the output against this list rather than rediscovering the design. The reasoning behind each constraint is in [guide section 5](ICHABOD-GUIDE.md#5-opentofu-blueprint).
+
+*Ground rules for generation*
+
+- [ ] Write against the current [AWS provider documentation](https://registry.terraform.io/providers/hashicorp/aws/latest/docs), not from memory. Argument names and resource shapes change between major versions.
+- [ ] Pin `required_version` for OpenTofu and a `~>` major version for the AWS provider. Commit `.terraform.lock.hcl`.
+- [ ] Region is `us-west-2`. Every price and AMI reference assumes it.
+- [ ] Set `default_tags` in the provider block so every resource carries `Project = "ichabod"`. Add a per-resource `Name` only where it aids the console.
+- [ ] Create nothing that is not on this list. If something appears missing, raise it rather than adding it.
+
+*Files*
+
+- [ ] `main.tf`, `variables.tf`, `outputs.tf`, `terraform.tfvars.example`, `.gitignore`, `.terraform.lock.hcl`.
+- [ ] `.gitignore` excludes `*.tfstate`, `*.tfstate.*`, `terraform.tfvars`, and `.terraform/`.
+- [ ] State stays local with off-host backups for the pilot. If that ever moves to S3, the backend must be encrypted, versioned, and locking.
+
+*Variables*
+
+| Name | Type | Default | Notes |
+|---|---|---|---|
+| `region` | string | `us-west-2` | |
+| `domain_name` | string | `ichabod-crane.net` | |
+| `alert_email` | string | none, required | Where budget and CloudWatch alarms are delivered |
+| `instance_type` | string | `t3a.large` | |
+| `root_volume_size` | number | `100` | GiB |
+| `ami_id` | string | none, required | Pinned deliberately — see below |
+| `monthly_budget_usd` | number | `80` | Expected spend is roughly $67; the extra leaves headroom before the alert fires |
+
+- [ ] No `key_name` variable, no `admin_cidr` variable, and no variable that holds a secret.
+
+*AMI selection*
+
+- [ ] Pin the AMI as a variable rather than using a `most_recent` data source, which would silently replace the instance on a later apply. Look up the current Canonical Ubuntu 24.04 image and record the ID in `terraform.tfvars`:
+
+```bash
+aws ec2 describe-images --region us-west-2 --owners 099720109477 \
+  --filters "Name=name,Values=ubuntu/images/hvm-ssd*/ubuntu-noble-24.04-amd64-server-*" \
+            "Name=state,Values=available" \
+  --query 'sort_by(Images,&CreationDate)[-1].[ImageId,Name]' --output text
+```
+
+*Data sources*
+
+- [ ] `aws_vpc` with `default = true`, and `aws_subnets` filtered by its `vpc-id`. Create no VPC resources.
+- [ ] `aws_route53_zone` looked up by `domain_name` — the zone already exists from the domain step above.
+- [ ] Place the instance with `subnet_id = sort(data.aws_subnets.default.ids)[0]`. Sort it: the set's order is not stable, and an unsorted index can force a replacement on a later apply.
+
+*Resources*
+
+- [ ] Security group in the default VPC, with separate `aws_vpc_security_group_ingress_rule` resources for TCP 80 and TCP 443 from `0.0.0.0/0`, and an egress rule allowing all outbound. No port 22 rule, ever.
+- [ ] IAM role with the EC2 assume-role policy, one `aws_iam_role_policy_attachment` to the `AmazonSSMManagedInstanceCore` managed policy, and an instance profile. A second attachment for `CloudWatchAgentServerPolicy` is allowed because section 2 installs that agent. Nothing else goes on this role.
+- [ ] `aws_instance` with: the pinned AMI, `instance_type`, the sorted subnet, the security group, the instance profile, `associate_public_ip_address = false`, `disable_api_termination = true`, `credit_specification { cpu_credits = "standard" }`, `metadata_options` requiring IMDSv2 with `http_put_response_hop_limit = 1`, and a `root_block_device` that is gp3, `root_volume_size`, encrypted, and deleted on termination. No `user_data` — the Ubuntu AMI ships the SSM agent enabled.
+- [ ] `aws_eip` with `domain = "vpc"` and a separate `aws_eip_association`.
+- [ ] Two `aws_route53_record` A records in the looked-up zone: the apex and `*`, both pointing at the Elastic IP with a 300-second TTL. Both are required — the wildcard does not cover the apex.
+- [ ] `aws_sns_topic` and an email `aws_sns_topic_subscription` to `alert_email`.
+- [ ] Three EC2 `aws_cloudwatch_metric_alarm` resources, all alarming to the SNS topic: `StatusCheckFailed >= 1`, `CPUCreditBalance` below a low threshold, and `EBSByteBalance` below 20 percent.
+- [ ] Three `CWAgent` namespace alarms: `mem_used_percent > 85`, `disk_used_percent > 75` as a warning, and `disk_used_percent > 90` as urgent.
+- [ ] `aws_budgets_budget`, monthly `COST`, limit `monthly_budget_usd`, notifying on `ACTUAL` above 80 percent and `FORECASTED` above 100 percent, to `alert_email`.
+- [ ] Optionally an `aws_dlm_lifecycle_policy` and its IAM role for EBS snapshots. Section 6 covers snapshots either way.
+
+*Outputs*
+
+- [ ] `instance_id` — the Makefile reads this with `tofu -chdir=tofu output -raw instance_id`, so the name matters.
+- [ ] The Elastic IP address, and the security group ID.
+- [ ] No output may contain a credential.
+
+*Known gotchas, so they are not mistaken for failures*
+
+- [ ] `disable_api_termination = true` makes `tofu destroy` fail. Set it false and apply once before an intentional teardown.
+- [ ] The instance boots before the Elastic IP is associated, so it has no egress for a moment and registers with SSM a minute or two late.
+- [ ] The `CWAgent` alarms sit in `INSUFFICIENT_DATA` until section 2 installs the agent. That is expected.
+- [ ] The SNS email subscription stays pending until Zach clicks the confirmation link, and alarms are silent until he does.
+
+*Apply*
+
+- [ ] `tofu init`, `tofu fmt -check`, `tofu validate`.
+- [ ] `tofu plan`, and read every resource in it against this list before applying.
+- [ ] `tofu apply`.
 
 **Laptop**
 
