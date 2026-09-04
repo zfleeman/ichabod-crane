@@ -1,11 +1,10 @@
-# RFC-0001 — Foundations: scope, authority, and accounts
+# RFC-01 — Foundations: scope, authority, and accounts
 
 | Field | Value |
 |---|---|
 | **Status** | Draft — awaiting review |
 | **Scope** | What the machine is, what Ichabod is allowed to do, what it costs, and the dedicated accounts, domain, mailbox, and secret storage it needs. |
-| **Source** | Sections 1–4 of [ICHABOD-GUIDE.md](../ICHABOD-GUIDE.md), copied without rewording |
-| **Related** | [RFC-0002](RFC-0002-infrastructure.md), [RFC-0003](RFC-0003-host-and-deployment.md), [RFC-0004](RFC-0004-agent-runtime.md), [RFC-0005](RFC-0005-autonomy-and-operations.md) |
+| **Related** | [RFC-02](RFC-02-infrastructure.md), [RFC-03](RFC-03-host-and-deployment.md), [RFC-04](RFC-04-agent-runtime.md), [RFC-05](RFC-05-autonomy-and-operations.md) |
 
 ## The machine
 
@@ -50,7 +49,7 @@ https://app-name.ichabod-crane.net
 Workboard proof + email to Zach
 ```
 
-**What is actually named Ichabod?** The OpenClaw agent whose id is `main`. Everything else — the EC2 instance, the domain, `/srv/ichabod` — just borrows the name. The personality lives in `main`'s workspace files: `IDENTITY.md` sets the name and presentation, `SOUL.md` sets voice and temperament, and `agents.entries.main.identity` in `openclaw.json` sets the display name and emoji. See [RFC-0004](RFC-0004-agent-runtime.md#identity-agents-and-workboard).
+**What is actually named Ichabod?** The OpenClaw agent whose id is `main`. Everything else — the EC2 instance, the domain, `/srv/ichabod` — just borrows the name. The personality lives in `main`'s workspace files: `IDENTITY.md` sets the name and presentation, `SOUL.md` sets voice and temperament, and `agents.entries.main.identity` in `openclaw.json` sets the display name and emoji. See [RFC-04](RFC-04-agent-runtime.md#identity-agents-and-workboard).
 
 There is no deployment broker. There is no Coolify, Kubernetes, GitHub Actions, or image registry, and none is planned. This box stays an experiment; needing another platform layer is a signal to shrink the experiment, not to grow the platform.
 
@@ -88,7 +87,7 @@ Markdown files are the native pattern, not a workaround. OpenClaw loads `AGENTS.
 
 The durable part is already a database: sessions, Workboard cards, automations, and secrets live in SQLite under `~/.openclaw/`. So the split is markdown for what the model reads, SQLite for what the Gateway tracks. Keep it — the alternative is bolting on tooling OpenClaw would not use. When a *project* needs structured recall (the GPU-deal history, for example), give that project its own Postgres container; do not try to relocate agent memory.
 
-OpenClaw does not itself make Docker safe, deploy a site automatically, or turn a Claude subscription into unlimited usage. This guide intentionally gives its main service account the host permissions needed to do those things directly.
+OpenClaw does not itself make Docker safe, deploy a site automatically, or turn a Claude subscription into unlimited usage. This design intentionally gives its main service account the host permissions needed to do those things directly.
 
 ## Authority and risk
 
@@ -167,7 +166,7 @@ authenticated Zach email
   → `full`-mode main agent
 ```
 
-Version 1 has exactly one allowlisted sender: Zach. There is no guest lane yet, because building one means a second IMAP account definition, a second restricted reader agent, and card metadata that survives the handoff. The full shape is in [RFC-0004](RFC-0004-agent-runtime.md#guest-senders-deferred).
+Version 1 has exactly one allowlisted sender: Zach. There is no guest lane yet, because building one means a second IMAP account definition, a second restricted reader agent, and card metadata that survives the handoff. The full shape is in [RFC-04](RFC-04-agent-runtime.md#guest-senders-deferred).
 
 **Can Ichabod build that lane itself later?** Technically yes — it runs in `full` mode and can edit `openclaw.json`. It should not, and this belongs on the list of things kept outside the box. Everything else Ichabod is trusted with affects what it *does*; changing `allowedSenders` changes who is allowed to *instruct* it. An agent that can extend its own trust boundary has no boundary, and the failure does not need to be malicious — a plausible-sounding email asking to add a collaborator is enough.
 
@@ -203,13 +202,13 @@ T3 instances are burstable. Configure CPU credits as `standard` for a predictabl
 
 Eight GiB is not for the tiny websites. It is for compilers, package managers, Docker layers, Chromium, tests, OpenClaw, Traefik, and a little concurrency. No GPU is required because model inference happens remotely.
 
-**Is 100 GiB small?** It is modest but not tight — about $8 per month, and roughly three times what a bare Ubuntu install plus OpenClaw uses. Docker is what consumes it: images, build cache, and container logs, which is why log rotation and weekly `docker system df` appear later in this guide. Size does not affect speed here, because a gp3 volume gets the same 3,000 IOPS and 125 MB/s baseline at any size; you pay for more capacity, not more throughput. A gp3 volume can also be grown while the instance is running, so starting at 100 GiB is a reversible decision.
+**Is 100 GiB small?** It is modest but not tight — about $8 per month, and roughly three times what a bare Ubuntu install plus OpenClaw uses. Docker is what consumes it: images, build cache, and container logs, which is why log rotation and weekly `docker system df` appear in [RFC-03](RFC-03-host-and-deployment.md#disk-housekeeping). Size does not affect speed here, because a gp3 volume gets the same 3,000 IOPS and 125 MB/s baseline at any size; you pay for more capacity, not more throughput. A gp3 volume can also be grown while the instance is running, so starting at 100 GiB is a reversible decision.
 
 ### Local alternatives
 
 The 2014 MacBook Air is not a candidate: two cores, at most 8 GiB (usually 4), a 128–256 GiB SSD, and no supported macOS. Docker builds and a headless Chromium would thrash it, and a home connection adds port forwarding, dynamic DNS, and outage handling on top. Use it as a client for the box, not as the box.
 
-If a spare 16 GiB x86 desktop or an N100/Ryzen mini PC ever appears, local hardware is the cheaper pilot. Otherwise this is a cloud build, and the rest of the guide assumes EC2.
+If a spare 16 GiB x86 desktop or an N100/Ryzen mini PC ever appears, local hardware is the cheaper pilot. Otherwise this is a cloud build, and the rest of this design assumes EC2.
 
 ### When to resize
 
@@ -331,11 +330,11 @@ openclaw secrets reload
 openclaw secrets audit --check
 ```
 
-Migrate every supported plaintext credential until the audit is clean. Never paste secrets into this guide, Git, OpenTofu variables, cloud-init, Workboard cards, email, or agent prompts.
+Migrate every supported plaintext credential until the audit is clean. Never paste secrets into these documents, Git, OpenTofu variables, cloud-init, Workboard cards, email, or agent prompts.
 
 OpenClaw's store is not an HSM: values are stored in its local SQLite state and protected by filesystem permissions. SecretRefs reduce casual exposure in configuration, generated files, logs, and model context; they do not protect secrets from a root-equivalent host process. [OpenClaw secrets management](https://docs.openclaw.ai/gateway/secrets)
 
-SQLite here is not a weak choice you can upgrade — it is where OpenClaw keeps its own state, it is not swappable, and single-writer embedded SQLite is genuinely solid for one process on one box. The risk is the disk, not the engine, so the mitigation is backups: `openclaw backup create --verify` copied off-host, plus EBS snapshots ([RFC-0005](RFC-0005-autonomy-and-operations.md#operations-recovery-and-success-criteria)). Postgres belongs in this design only when an *application* Ichabod builds needs it, as its own container.
+SQLite here is not a weak choice you can upgrade — it is where OpenClaw keeps its own state, it is not swappable, and single-writer embedded SQLite is genuinely solid for one process on one box. The risk is the disk, not the engine, so the mitigation is backups: `openclaw backup create --verify` copied off-host, plus EBS snapshots ([RFC-05](RFC-05-autonomy-and-operations.md#operations-recovery-and-success-criteria)). Postgres belongs in this design only when an *application* Ichabod builds needs it, as its own container.
 
 Do not attach an EC2 IAM role initially. Add a narrowly scoped role later only for a specific capability you have decided the agent should possess.
 

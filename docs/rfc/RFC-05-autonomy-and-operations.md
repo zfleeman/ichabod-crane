@@ -1,11 +1,10 @@
-# RFC-0005 — Autonomy, operations, and recovery
+# RFC-05 — Autonomy, operations, and recovery
 
 | Field | Value |
 |---|---|
 | **Status** | Draft — awaiting review |
 | **Scope** | The recurring automations that make the system autonomous, the capacity ceilings, and the backup, update, kill-switch, and completion criteria. |
-| **Source** | Sections 12 and 14 of [ICHABOD-GUIDE.md](../ICHABOD-GUIDE.md), copied without rewording |
-| **Related** | [RFC-0001](RFC-0001-foundations.md), [RFC-0004](RFC-0004-agent-runtime.md) |
+| **Related** | [RFC-01](RFC-01-foundations.md), [RFC-04](RFC-04-agent-runtime.md) |
 
 ## Persistent autonomy
 
@@ -99,7 +98,7 @@ Operational ceilings:
 | Five experimental services | Convention, checked by the director | `AGENTS.md`, verified with `docker compose ls` |
 | 0.5 CPU / 512 MiB | Docker | `cpus` and `mem_limit` in each app's `compose.yaml` |
 | Timeout and retry budget | Workboard card fields | Per-card, set when the card is written |
-| Disk stop at 75% | Alarm plus director check | CloudWatch agent alarm ([RFC-0001](RFC-0001-foundations.md#alarms)) and `df -h` in the pass |
+| Disk stop at 75% | Alarm plus director check | CloudWatch agent alarm ([RFC-01](RFC-01-foundations.md#alarms)) and `df -h` in the pass |
 | Quota back-off | Claude Code, surfaced to the agent | Nothing to configure; the runtime reports exhaustion |
 
 Only the container limits are enforced by machinery that cannot be talked out of it. The rest are policies Ichabod follows because `AGENTS.md` says so — which is the honest position for a lab, but do not mistake them for guardrails.

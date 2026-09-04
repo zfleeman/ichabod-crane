@@ -1,15 +1,14 @@
-# RFC-0003 — Host baseline and deployment plane
+# RFC-03 — Host baseline and deployment plane
 
 | Field | Value |
 |---|---|
 | **Status** | Draft — awaiting review |
 | **Scope** | How the Ubuntu host is provisioned and secured, and how Traefik plus Docker Compose turn a labelled container into a public HTTPS site. |
-| **Source** | Sections 6 and 10 of [ICHABOD-GUIDE.md](../ICHABOD-GUIDE.md), copied without rewording |
-| **Related** | [RFC-0002](RFC-0002-infrastructure.md), [RFC-0004](RFC-0004-agent-runtime.md) |
+| **Related** | [RFC-02](RFC-02-infrastructure.md), [RFC-04](RFC-04-agent-runtime.md) |
 
 ## Provision and secure the host
 
-Open a shell with SSM (`make shell`, defined in [RFC-0002](RFC-0002-infrastructure.md#private-administration-with-aws-ssm)). No host key, no private key, no bastion.
+Open a shell with SSM (`make shell`, defined in [RFC-02](RFC-02-infrastructure.md#private-administration-with-aws-ssm)). No host key, no private key, no bastion.
 
 SSM drops you in as `ssm-user`, a service-managed account with passwordless sudo — which answers a question the earlier draft left open: **there is no `ubuntu` user in this workflow.** `ubuntu` is just the default login Canonical bakes into its AMIs for SSH, and with SSH gone it is vestigial. The two accounts that matter are `ssm-user` for administration and `openclaw` for everything Ichabod does:
 

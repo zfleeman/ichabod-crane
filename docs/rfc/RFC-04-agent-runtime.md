@@ -1,11 +1,10 @@
-# RFC-0004 — Agent runtime: OpenClaw, agents, and email
+# RFC-04 — Agent runtime: OpenClaw, agents, and email
 
 | Field | Value |
 |---|---|
 | **Status** | Draft — awaiting review |
 | **Scope** | Installing Claude Code and OpenClaw, the identity and workspace files, the agent roster and Workboard, and email as the front door. |
-| **Source** | Sections 8, 9, and 11 of [ICHABOD-GUIDE.md](../ICHABOD-GUIDE.md), copied without rewording |
-| **Related** | [RFC-0001](RFC-0001-foundations.md), [RFC-0003](RFC-0003-host-and-deployment.md), [RFC-0005](RFC-0005-autonomy-and-operations.md) |
+| **Related** | [RFC-01](RFC-01-foundations.md), [RFC-03](RFC-03-host-and-deployment.md), [RFC-05](RFC-05-autonomy-and-operations.md) |
 
 ## Install OpenClaw and Claude
 
@@ -79,7 +78,7 @@ The available model and subscription allowance can change. Treat the output of t
 
 ### Managed service and loopback binding
 
-Two jobs here. First, make the Gateway a systemd user service so it starts on boot and keeps running when nobody is logged in — otherwise Ichabod stops existing the moment an administrative session closes. Second, pin its listener to `127.0.0.1` so the only path to it is the SSM port forward from [RFC-0002](RFC-0002-infrastructure.md#private-administration-with-aws-ssm).
+Two jobs here. First, make the Gateway a systemd user service so it starts on boot and keeps running when nobody is logged in — otherwise Ichabod stops existing the moment an administrative session closes. Second, pin its listener to `127.0.0.1` so the only path to it is the SSM port forward from [RFC-02](RFC-02-infrastructure.md#private-administration-with-aws-ssm).
 
 Enable linger so the user service survives logout:
 
@@ -358,10 +357,10 @@ Host shell and Docker are not one switch — they are granted in two different p
 
 | Layer | Where | What it does |
 |---|---|---|
-| Operating system | `sudo usermod -aG docker openclaw` ([RFC-0003](RFC-0003-host-and-deployment.md#install-docker)) | Lets the `openclaw` Unix user talk to the Docker socket at all |
+| Operating system | `sudo usermod -aG docker openclaw` ([RFC-03](RFC-03-host-and-deployment.md#install-docker)) | Lets the `openclaw` Unix user talk to the Docker socket at all |
 | OpenClaw | `tools.exec.host=gateway`, `tools.exec.mode=full`, sandbox off ([above](#deliberately-enable-full-host-execution)) | Lets the agent run host commands as that user, without a reviewer |
 
-Grant the OS half and skip the OpenClaw half and every `docker` call is refused by policy; do the reverse and the commands run but Docker denies the socket. Verify with the five-step authority test in section 8 rather than assuming.
+Grant the OS half and skip the OpenClaw half and every `docker` call is refused by policy; do the reverse and the commands run but Docker denies the socket. Verify with the five-step authority test [above](#deliberately-enable-full-host-execution) rather than assuming.
 
 #### `mail_reader` — intake membrane
 
@@ -380,7 +379,7 @@ scout: {
 }
 ```
 
-That shape is deliberate. `scout` proposes; `main` decides and executes. An idea-generating agent that can also dispatch its own ideas will happily fill the board and the CPU with its own suggestions, which is the failure mode the capacity policy in [RFC-0005](RFC-0005-autonomy-and-operations.md#capacity-policy) exists to prevent.
+That shape is deliberate. `scout` proposes; `main` decides and executes. An idea-generating agent that can also dispatch its own ideas will happily fill the board and the CPU with its own suggestions, which is the failure mode the capacity policy in [RFC-05](RFC-05-autonomy-and-operations.md#capacity-policy) exists to prevent.
 
 ### Workboard
 
@@ -532,7 +531,7 @@ Enable explicit ownership and add `mail_reader` before enabling IMAP. The follow
 
 Replace the host and username for whichever provider you chose.
 
-Authenticate with a **dedicated app password**, stored as the SecretRef shown above — not OAuth. OAuth for IMAP is essentially a Google and Microsoft feature, and none of the providers in [RFC-0001](RFC-0001-foundations.md#email) needs it; they all authenticate machine clients with app passwords. An app password is also easier to reason about for an unattended box: it is scoped to mail, revocable from the provider's UI without touching anything else, and it will not expire mid-week the way a refresh token can.
+Authenticate with a **dedicated app password**, stored as the SecretRef shown above — not OAuth. OAuth for IMAP is essentially a Google and Microsoft feature, and none of the providers in [RFC-01](RFC-01-foundations.md#email) needs it; they all authenticate machine clients with app passwords. An app password is also easier to reason about for an unattended box: it is scoped to mail, revocable from the provider's UI without touching anything else, and it will not expire mid-week the way a refresh token can.
 
 The plugin rejects a nonallowlisted `From` before model execution and, by default, expects aligned DMARC evidence. Display names and `Reply-To` do not grant authority. Do not lower sender authentication merely to make the first test pass.
 

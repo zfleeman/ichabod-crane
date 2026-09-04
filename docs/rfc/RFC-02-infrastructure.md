@@ -1,11 +1,10 @@
-# RFC-0002 — Infrastructure: OpenTofu, SSM, and the admin Makefile
+# RFC-02 — Infrastructure: OpenTofu, SSM, and the admin Makefile
 
 | Field | Value |
 |---|---|
 | **Status** | Draft — awaiting review |
 | **Scope** | The OpenTofu module Zach owns and applies, and the SSM-only administrative path that replaces SSH. |
-| **Source** | Sections 5 and 7 of [ICHABOD-GUIDE.md](../ICHABOD-GUIDE.md), copied without rewording |
-| **Related** | [RFC-0001](RFC-0001-foundations.md), [RFC-0003](RFC-0003-host-and-deployment.md) |
+| **Related** | [RFC-01](RFC-01-foundations.md), [RFC-03](RFC-03-host-and-deployment.md) |
 
 ## OpenTofu blueprint
 
@@ -57,14 +56,14 @@ Create:
 - An Elastic IP.
 - Apex and wildcard Route 53 A records.
 - Budget alerts near the expected monthly spend.
-- CloudWatch alarms and an SNS email topic (see [RFC-0001](RFC-0001-foundations.md#alarms)).
+- CloudWatch alarms and an SNS email topic (see [RFC-01](RFC-01-foundations.md#alarms)).
 - Optional EBS snapshot policy.
 
 No SSH key pair, because there is no SSH. Use the current Canonical Ubuntu AMI for `us-west-2`, selected deliberately rather than copied from an old guide.
 
 ### The one IAM role
 
-[RFC-0001](RFC-0001-foundations.md#openclaw-secretrefs) says not to attach an instance role. This is the single exception, and it is worth being precise about why it is safe: `AmazonSSMManagedInstanceCore` lets the instance talk *to* Systems Manager. It grants no S3, no Secrets Manager, no EC2 mutation, and no ability to reach any other resource in the account. A root-equivalent agent that steals these credentials gains the ability to be managed by SSM, which it already was.
+[RFC-01](RFC-01-foundations.md#openclaw-secretrefs) says not to attach an instance role. This is the single exception, and it is worth being precise about why it is safe: `AmazonSSMManagedInstanceCore` lets the instance talk *to* Systems Manager. It grants no S3, no Secrets Manager, no EC2 mutation, and no ability to reach any other resource in the account. A root-equivalent agent that steals these credentials gains the ability to be managed by SSM, which it already was.
 
 Add the CloudWatch agent policy alongside it only if metrics are published from the host. Nothing else goes on this role.
 
@@ -129,7 +128,7 @@ Associate the Elastic IP separately. A stopped instance retains the address, and
 
 Ubuntu 24.04 AMIs ship the SSM agent preinstalled and enabled, so no user data is required to make the instance manageable. Confirm it registered before assuming so.
 
-This guide intentionally omits complete provider, alarm, and budget resources. They are ordinary HCL and consume many printed pages. The design constraints above matter more than one generated implementation. Use the current [AWS provider documentation](https://registry.terraform.io/providers/hashicorp/aws/latest/docs) while writing the module.
+This RFC intentionally omits complete provider, alarm, and budget resources. They are ordinary HCL and consume many printed pages. The design constraints above matter more than one generated implementation. Use the current [AWS provider documentation](https://registry.terraform.io/providers/hashicorp/aws/latest/docs) while writing the module.
 
 Route 53 is authoritative, so create:
 
