@@ -225,20 +225,6 @@ Eight GiB is not for the tiny websites. It is for compilers, package managers, D
 
 **Is 100 GiB small?** It is modest but not tight — about $8 per month, and roughly three times what a bare Ubuntu install plus OpenClaw uses. Docker is what consumes it: images, build cache, and container logs, which is why log rotation and weekly `docker system df` appear later in this guide. Size does not affect speed here, because a gp3 volume gets the same 3,000 IOPS and 125 MB/s baseline at any size; you pay for more capacity, not more throughput. A gp3 volume can also be grown while the instance is running, so starting at 100 GiB is a reversible decision.
 
-**The other storage options, and why none of them wins here:**
-
-| Option | What it is | Verdict |
-|---|---|---|
-| **gp3** | General-purpose SSD, ~$0.08/GiB-month, 3,000 IOPS baseline included | **The choice.** Throughput is independent of size |
-| gp2 | The previous-generation SSD; IOPS scale with size, so small volumes are slow | Strictly worse than gp3 at the same price. No reason to pick it |
-| io1 / io2 | Provisioned IOPS SSD, several times the price | For databases that need guaranteed latency. Nothing here does |
-| st1 / sc1 | Throughput-optimized and cold HDD, cheaper per GiB | Cannot be a boot volume, and random I/O is poor — the worst case for Docker layers |
-| Instance store | NVMe physically attached to the host; very fast | **Wiped when the instance stops.** Disqualifying for a box whose whole point is durable state |
-| EFS | Managed NFS, mounted over the network, pay per GiB stored | Solves sharing a filesystem between machines. There is one machine |
-| S3 | Object storage, ~$0.023/GiB-month | Not a filesystem, but the right place for backups — see [section 14](#getting-backups-off-the-box-into-s3) |
-
-The realistic future change is not a different volume type but a second gp3 volume mounted at `/var/lib/docker`, which separates the thing that fills up from the root filesystem. Worth doing if disk alarms become routine; unnecessary at the start.
-
 ## Local alternatives
 
 The 2014 MacBook Air is not a candidate: two cores, at most 8 GiB (usually 4), a 128–256 GiB SSD, and no supported macOS. Docker builds and a headless Chromium would thrash it, and a home connection adds port forwarding, dynamic DNS, and outage handling on top. Use it as a client for the box, not as the box.
@@ -653,7 +639,7 @@ Where everything lives:
 | `/srv/ichabod/apps/<slug>/` | `openclaw` | One directory per application: source, Dockerfile, compose.yaml, its own `.git` | GitHub (source), volume backups (data) |
 | `/srv/ichabod/platform/` | `openclaw` | Traefik and other host-owned infrastructure compose files | Git |
 | `/srv/ichabod/templates/` | `openclaw` | Agent workspace template and the `new-agent` script | Git |
-| `/srv/ichabod/backups/` | `openclaw` | Local staging for OpenClaw backups before they go off-host | Copied to S3 |
+| `/srv/ichabod/backups/` | `openclaw` | Local staging for OpenClaw backups before they go off-host | Copied off-host |
 | `/home/openclaw/.openclaw/` | `openclaw` | Gateway state, SQLite, secrets, agent workspaces | `openclaw backup create` |
 | `/var/lib/docker/` | root | Images, layers, build cache, named volumes | Volume-by-volume, never wholesale |
 
@@ -1799,41 +1785,7 @@ Layer 3 means the applications **Ichabod builds and runs** — the Minesweeper s
 
 Writing that README is part of the definition of done for a stateful app, not a follow-up card.
 
-## Getting backups off the box, into S3
-
-A backup that only exists on the volume that failed is not a backup, so `/srv/ichabod/backups/` is staging, not storage. S3 is the right destination, and it can be done without handing Ichabod a general-purpose AWS credential.
-
-The design question is not "can the agent write to S3" but "what can the agent do to the backups once it can reach them". A root-equivalent agent with ordinary `s3:*` on the bucket can delete every backup it ever made, which is precisely the scenario backups exist for. So make the credential **append-only** and let the bucket enforce the rest:
-
-**Bucket:** versioning on, Object Lock in compliance mode with a retention period (30 days is a reasonable lab default), a lifecycle rule to Glacier Instant Retrieval after 30 days, and public access blocked. Object Lock means even a delete issued with valid credentials cannot destroy a copy inside the retention window.
-
-**Policy on the instance role** — note there is no `GetObject`, no `DeleteObject`, and no `ListBucket`:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [{
-    "Effect": "Allow",
-    "Action": "s3:PutObject",
-    "Resource": "arn:aws:s3:::ichabod-backups/*"
-  }]
-}
-```
-
-Write-only is the whole point. Ichabod can deposit a backup and cannot read one back, enumerate what exists, or remove anything. Restores are Zach's job, from his own credentials, which is correct — a restore is a recovery action, not routine agent work.
-
-This is the second and last addition to the instance role from [section 5](#the-one-iam-role), alongside `AmazonSSMManagedInstanceCore`. Keep the habit of asking what a stolen credential would permit before attaching the next one.
-
-The nightly job is then unremarkable:
-
-```bash
-openclaw backup create --output /srv/ichabod/backups/openclaw --verify
-aws s3 cp /srv/ichabod/backups/openclaw   s3://ichabod-backups/openclaw/$(date +%F)/ --recursive
-```
-
-Add each application's dump command to the same job. Schedule EBS snapshots separately through a lifecycle policy — those are Zach's, taken by AWS, and never touched by anything on the box.
-
-Then verify it: perform at least one restore into a disposable instance. Snapshots may be crash-consistent, so take database-native dumps first when consistency matters. An untested restore is a hypothesis.
+Schedule EBS snapshots through a lifecycle policy — those are Zach's, taken by AWS, and never touched by anything on the box. Then perform at least one restore into a disposable instance. Snapshots may be crash-consistent, so take database-native dumps first when consistency matters. An untested restore is a hypothesis.
 
 ## Updates
 
@@ -1936,7 +1888,7 @@ Deployment:
 
 Recovery:
 
-- [ ] An OpenClaw backup verifies and exists in S3, written with the append-only role.
+- [ ] An OpenClaw backup verifies and exists off-host.
 - [ ] At least one application backup has been restored successfully.
 - [ ] A current EBS snapshot exists.
 - [ ] Zach can disable ingestion, stop the Gateway, stop an app, revoke credentials, and stop EC2.
