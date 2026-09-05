@@ -1,0 +1,7 @@
+# Copy to terraform.tfvars, which is gitignored, and fill in.
+
+alert_email = "you@example.com"
+
+# Canonical Ubuntu 24.04, us-east-2, looked up 2026-09-04:
+# ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-20260904
+ami_id = "ami-00adec9774170bad2"

@@ -354,7 +354,7 @@ The instance must sit in a public subnet with a public address (the Elastic IP),
 
 The full resource list lives in [the setup checklist](SETUP-CHECKLIST.md#1-accounts-domain-and-opentofu). In outline it is a security group, the instance and its encrypted root volume, an IAM role and instance profile, an Elastic IP, the two Route 53 A records, budget alerts, and CloudWatch alarms with an SNS email topic (see [Alarms](#alarms)).
 
-No SSH key pair, because there is no SSH. The AMI is a current Canonical Ubuntu image for `us-west-2`, pinned deliberately rather than copied from an old guide or resolved to whatever is newest at apply time.
+No SSH key pair, because there is no SSH. The AMI is a current Canonical Ubuntu image for `us-east-2`, pinned deliberately rather than copied from an old guide or resolved to whatever is newest at apply time.
 
 ## The one IAM role
 
@@ -474,34 +474,12 @@ The laptop needs the Session Manager plugin installed once. If the instance does
 
 ## The Makefile
 
-Keep this next to the OpenTofu module so the connection details live in version control rather than in memory:
+Every command Zach runs by hand lives in the `Makefile` at the repository root, so the connection details are in version control rather than in memory. `make help` lists the targets. The OpenTofu ones — `init`, `check`, `plan`, `apply` — wrap `tofu -chdir=tofu`. The SSM ones read the instance ID out of the state rather than hardcoding it:
 
-```makefile
-INSTANCE_ID := $(shell tofu -chdir=tofu output -raw instance_id)
-GATEWAY_PORT := 18789
-
-# Interactive shell on the box (lands as ssm-user).
-shell:
-	aws ssm start-session --target $(INSTANCE_ID)
-
-# Shell directly as Ichabod's service account.
-openclaw:
-	aws ssm start-session --target $(INSTANCE_ID) \
-	  --document-name AWS-StartInteractiveCommand \
-	  --parameters command="sudo -iu openclaw"
-
-# Forward the loopback Gateway to http://127.0.0.1:18789 on the laptop.
-ui:
-	aws ssm start-session --target $(INSTANCE_ID) \
-	  --document-name AWS-StartPortForwardingSession \
-	  --parameters '{"portNumber":["$(GATEWAY_PORT)"],"localPortNumber":["$(GATEWAY_PORT)"]}'
-
-status:
-	aws ssm describe-instance-information \
-	  --filters Key=InstanceIds,Values=$(INSTANCE_ID) --output table
-
-.PHONY: shell openclaw ui status
-```
+- `make shell` — an interactive shell on the box, landing as `ssm-user`.
+- `make openclaw` — a shell as Ichabod's service account.
+- `make ui` — forwards the loopback Gateway to `http://127.0.0.1:18789` on the laptop.
+- `make status` — asks SSM whether the instance is `Online`.
 
 ## Open the Control UI
 
