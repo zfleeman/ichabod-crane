@@ -132,6 +132,7 @@ Reference: guide sections [6](ICHABOD-GUIDE.md#6-provision-and-secure-the-host),
 
 - [ ] Confirm the `shell`, `openclaw`, `ui`, and `status` targets in the repository-root `Makefile` still match the running instance.
 - [ ] Confirm `make shell` opens a session and lands as `ssm-user`.
+- [ ] `make openclaw` fails with `sudo: unknown user openclaw` until the Baseline block below creates that user. Re-run it after the Baseline block, not here.
 
 **Baseline**
 
