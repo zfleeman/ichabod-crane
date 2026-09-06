@@ -137,18 +137,18 @@ Reference: guide sections [6](ICHABOD-GUIDE.md#6-provision-and-secure-the-host),
 **Baseline**
 
 - [ ] `apt-get update && apt-get upgrade -y`, install `ca-certificates curl git jq unzip build-essential`, reboot.
-- [ ] Create the `openclaw` user, `/srv/ichabod`, and the `apps`, `platform`, `backups`, and `templates` directories owned by it.
+- [ ] Create the `openclaw` user with `useradd --create-home --shell /bin/bash`, plus `/srv/ichabod` and the `apps`, `platform`, `backups`, and `templates` directories owned by it. `useradd` defaults to `/bin/sh`, which is dash on Ubuntu, so the shell has to be named explicitly.
 - [ ] `loginctl enable-linger openclaw`.
 - [ ] Create a 4 GiB swap file and add it to `/etc/fstab`.
-- [ ] Optionally `systemctl disable --now ssh`. Leave the daemon installed but disabled.
+- [ ] Optionally `systemctl disable --now ssh ssh.socket`. Both units are needed on 24.04, where sshd is socket-activated and disabling only the service leaves the socket listening. Leave the daemon installed but disabled, and confirm with `ss -lntp | grep ':22 '`.
 - [ ] Confirm `amazon-ssm-agent` is healthy before relying on SSM as the only door.
-- [ ] Install the CloudWatch agent so `mem_used_percent` and `disk_used_percent` can be alarmed on. These are not EC2-native metrics.
+- [ ] Install the CloudWatch agent so `mem_used_percent` and `disk_used_percent` can be alarmed on. These are not EC2-native metrics. Write its config to `/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json`, collecting only `/` and aggregating on `InstanceId`, then load it with `amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c file:<that path>`.
 
 **Docker**
 
 - [ ] Install Docker Engine and `systemctl enable --now docker`.
 - [ ] `usermod -aG docker openclaw`, then re-enter the login session so the group applies.
-- [ ] Configure `/etc/docker/daemon.json` with `json-file` logging capped at 10m and 3 files, then restart Docker once, before any application exists.
+- [ ] Configure `/etc/docker/daemon.json` with `json-file` logging capped at 10m and 3 files, then restart Docker once, before any application exists. Check it with `sudo docker info --format '{{.LoggingDriver}}'` — `ssm-user` reaches Docker only through sudo, because the `docker` group belongs to `openclaw` alone.
 - [ ] Verify as `openclaw`: `docker version`, `docker compose version`, `docker run --rm hello-world`. This test confirms the intended root-equivalent authority.
 
 **Traefik**
