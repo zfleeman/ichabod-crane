@@ -34,8 +34,8 @@ This module is the one piece Claude generates. Zach reviews and applies it. The 
 *Ground rules for generation*
 
 - [ ] Write against the current [AWS provider documentation](https://registry.terraform.io/providers/hashicorp/aws/latest/docs), not from memory. Argument names and resource shapes change between major versions.
-- [ ] Pin `required_version` for OpenTofu and a `~>` major version for the AWS provider. Commit `.terraform.lock.hcl`.
-- [ ] Region is `us-west-2`. Every price and AMI reference assumes it.
+- [ ] Pin `required_version` for OpenTofu and a `~>` major version for the AWS provider. Commit `.terraform.lock.hcl`. The exact OpenTofu binary is pinned in `.opentofu-version` at the repository root, which `tenv` reads.
+- [ ] Region is `us-east-2`. Every price and AMI reference assumes it.
 - [ ] Set `default_tags` in the provider block so every resource carries `Project = "ichabod"`. Add a per-resource `Name` only where it aids the console.
 - [ ] Create nothing that is not on this list. If something appears missing, raise it rather than adding it.
 
@@ -47,15 +47,12 @@ This module is the one piece Claude generates. Zach reviews and applies it. The 
 
 *Variables*
 
+There is one environment and no dev/prod split, so there are only two variables. Everything else — region `us-east-2`, domain `ichabod-crane.net`, `t3a.large`, a 100 GiB root volume, an $80 monthly budget against an expected spend of roughly $67 — is written directly into the resource that uses it, where it can be read in place.
+
 | Name | Type | Default | Notes |
 |---|---|---|---|
-| `region` | string | `us-west-2` | |
-| `domain_name` | string | `ichabod-crane.net` | |
 | `alert_email` | string | none, required | Where budget and CloudWatch alarms are delivered |
-| `instance_type` | string | `t3a.large` | |
-| `root_volume_size` | number | `100` | GiB |
 | `ami_id` | string | none, required | Pinned deliberately — see below |
-| `monthly_budget_usd` | number | `80` | Expected spend is roughly $67; the extra leaves headroom before the alert fires |
 
 - [ ] No `key_name` variable, no `admin_cidr` variable, and no variable that holds a secret.
 
@@ -64,7 +61,7 @@ This module is the one piece Claude generates. Zach reviews and applies it. The 
 - [ ] Pin the AMI as a variable rather than using a `most_recent` data source, which would silently replace the instance on a later apply. Look up the current Canonical Ubuntu 24.04 image and record the ID in `terraform.tfvars`:
 
 ```bash
-aws ec2 describe-images --region us-west-2 --owners 099720109477 \
+aws ec2 describe-images --region us-east-2 --owners 099720109477 \
   --filters "Name=name,Values=ubuntu/images/hvm-ssd*/ubuntu-noble-24.04-amd64-server-*" \
             "Name=state,Values=available" \
   --query 'sort_by(Images,&CreationDate)[-1].[ImageId,Name]' --output text
@@ -133,7 +130,7 @@ Reference: guide sections [6](ICHABOD-GUIDE.md#6-provision-and-secure-the-host),
 
 **Administration**
 
-- [ ] Write the Makefile next to the OpenTofu module with the `shell`, `openclaw`, `ui`, and `status` targets.
+- [ ] Confirm the `shell`, `openclaw`, `ui`, and `status` targets in the repository-root `Makefile` still match the running instance.
 - [ ] Confirm `make shell` opens a session and lands as `ssm-user`.
 
 **Baseline**
