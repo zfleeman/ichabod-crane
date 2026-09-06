@@ -405,6 +405,8 @@ SSM drops you in as `ssm-user`, a service-managed account with passwordless sudo
 
 Patch Ubuntu, install the ordinary build and network tools, and reboot. Then create the `openclaw` service account, `/srv/ichabod` and its four working directories, and enable linger so the user's services survive logout.
 
+Name the login shell explicitly when creating the account: `useradd` takes its default from `/etc/default/useradd`, which Ubuntu ships as `/bin/sh`, and that is dash. A dash login shell reads `~/.profile` but not `~/.bashrc`, so the `PATH` and environment lines that Claude Code and OpenClaw's installers append would silently never load. `--shell /bin/bash` avoids a class of confusing failures later.
+
 ## Install Docker
 
 Use Docker's current Ubuntu installation instructions. For a disposable lab, its official convenience installer is a reasonable shortcut, provided the script is inspected before it runs and removed afterward. The `openclaw` user joins the `docker` group, and the login session has to be re-entered before that group applies.
@@ -423,13 +425,23 @@ Docker log rotation belongs in `/etc/docker/daemon.json`:
 }
 ```
 
-Restart Docker once for that to take effect, before any application exists.
+Restart Docker once for that to take effect, before any application exists. Checking the result from the administration session needs sudo — `ssm-user` is not in the `docker` group and never should be. Direct Docker access belongs to `openclaw` alone, which is exactly what the `hello-world` test proves.
 
 ## Swap and basic host policy
 
 A 4 GiB swap file, added to `/etc/fstab` so it survives reboot, is an OOM fuse rather than extra working memory.
 
 There is no sshd configuration to harden, because the security group never admits port 22. The daemon can be disabled outright rather than merely left unreachable. Leave it installed but disabled; reinstating it from an SSM session is easy, and Git's SSH client is a separate binary that keeps working either way. Confirm the SSM agent is healthy before relying on it as the only door.
+
+Ubuntu 24.04 activates sshd through a socket unit, so `ssh.socket` holds port 22 and starts `ssh.service` on the first connection. Disabling the service alone leaves the socket listening and the daemon one connection away from returning; both units have to go. `ss -lntp` showing nothing on 22 is the check that actually settles it, whatever the unit states say.
+
+## Host metrics
+
+Memory and disk are not EC2-native metrics, so the alarms in the blueprint stay in `INSUFFICIENT_DATA` until the CloudWatch agent publishes them. Its config lives on the host, at `/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json`, rather than in Parameter Store — there is one host, and a file next to the binary is easier to read a year from now than a parameter you have to remember the name of.
+
+Two details in that config are load-bearing. Collect only `/`, and set `aggregation_dimensions` to `InstanceId`, so the agent emits a rollup carrying that dimension alone. The alarms are declared with `InstanceId` as their only dimension; the agent's default per-filesystem metrics also carry `path`, `device`, and `fstype`, and those will never match. If an alarm sits in `INSUFFICIENT_DATA` after the agent is running, this is why.
+
+A freshly built host also trips `ichabod-cpu-credit-balance-low` during setup. Patching and installing Docker spends the launch credit allowance, and a t3a.large in `standard` mode re-earns roughly 36 credits an hour, so the alarm clears on its own once the box goes idle. It is only worth investigating if it is still firing the next day.
 
 ## Disk housekeeping
 
