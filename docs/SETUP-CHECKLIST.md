@@ -153,14 +153,14 @@ Reference: guide sections [6](ICHABOD-GUIDE.md#6-provision-and-secure-the-host),
 
 **Traefik**
 
-- [ ] Write `/srv/ichabod/platform/traefik/compose.yaml` against a pinned, reviewed Traefik 3.x image, with the `ichabod-proxy` network, the Let's Encrypt HTTP-01 resolver, Zach's ACME email, and the `letsencrypt` volume.
-- [ ] `docker compose config`, then `up -d`, then check the logs.
+- [ ] Write `/srv/ichabod/platform/traefik/compose.yaml` against a pinned, reviewed Traefik 3.x image, with the `ichabod-proxy` network, the Let's Encrypt HTTP-01 resolver, Zach's ACME email, and the `letsencrypt` volume. The ACME address is `ichabod@ichabod-crane.net`. Let's Encrypt never checks that it is deliverable, so setting it here is fine even though section 5 is what actually creates the mailbox.
+- [ ] `docker compose config`, then `up -d`, then read the logs. Traefik's `--log.level` defaults to `ERROR`, so a healthy proxy prints nothing at all. An empty log is the pass, not a broken container.
 
 **Verify**
 
 - [ ] Deploy two tiny labelled test sites and confirm both hostnames route to two different Compose services.
-- [ ] Each receives valid HTTPS with no DNS edit and no security-group change.
-- [ ] Traefik returns after a reboot and owns only public ports 80 and 443.
+- [ ] Each receives valid HTTPS with no DNS edit and no security-group change. The first request after `up -d` usually fails with `unable to get local issuer certificate`. That is Traefik's built-in self-signed certificate answering while ACME is still running. Wait half a minute and retry before investigating.
+- [ ] Traefik returns after a reboot and owns only public ports 80 and 443. `sudo ss -lntp` should show 80 and 443 on `0.0.0.0` and nothing else outside loopback.
 
 ---
 
