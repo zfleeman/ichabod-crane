@@ -153,7 +153,7 @@ Reference: guide sections [6](ICHABOD-GUIDE.md#6-provision-and-secure-the-host),
 
 **Traefik**
 
-- [ ] Write `/srv/ichabod/platform/traefik/compose.yaml` against a pinned, reviewed Traefik 3.x image, with the `ichabod-proxy` network, the Let's Encrypt HTTP-01 resolver, Zach's ACME email, and the `letsencrypt` volume. Use Zach's own address for ACME. `ichabod@ichabod-crane.net` does not exist until section 5, and expiry warnings have to reach a human.
+- [ ] Write `/srv/ichabod/platform/traefik/compose.yaml` against a pinned, reviewed Traefik 3.x image, with the `ichabod-proxy` network, the Let's Encrypt HTTP-01 resolver, Zach's ACME email, and the `letsencrypt` volume. The ACME address is `ichabod@ichabod-crane.net`. Let's Encrypt never checks that it is deliverable, so setting it here is fine even though section 5 is what actually creates the mailbox.
 - [ ] `docker compose config`, then `up -d`, then read the logs. Traefik's `--log.level` defaults to `ERROR`, so a healthy proxy prints nothing at all. An empty log is the pass, not a broken container.
 
 **Verify**
