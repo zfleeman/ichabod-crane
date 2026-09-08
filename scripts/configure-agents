@@ -50,10 +50,18 @@ fi
 # minimal tool profile whose only useful mutation is creating a triage card.
 # The deny list is belt and braces: profile "minimal" should already exclude
 # these, but naming them means a future default change cannot quietly widen it.
-# Sonnet, not the Opus default. mail_reader does one bounded, well-specified
-# job on every admitted message, and the cheaper model is the right size for
-# it. Set per-agent rather than in the UI so a config restore brings it back.
-oc config set agents.entries.mail_reader.model '{"primary":"anthropic/claude-sonnet-5"}' --strict-json
+# mail_reader runs a cheap OpenAI model on OpenClaw's own runtime, and that
+# second half is the point. Under a CLI backend (claude-cli, or the Codex
+# harness OpenAI picks by default) the harness brings its own tools, runs as
+# the openclaw host user, and OpenClaw never applies sandbox.mode or the tool
+# profile. Pinning agentRuntime to "openclaw" is what makes the sandbox and
+# the deny lists below real rather than decorative.
+#
+# fallbacks is deliberately empty. A fallback to any anthropic model would put
+# this agent back on claude-cli the moment OpenAI is unreachable, silently
+# un-sandboxing the one agent that reads untrusted mail. Better it fails.
+oc config set agents.entries.mail_reader.model '{"primary":"openai/gpt-5.4-nano","fallbacks":[]}' --strict-json
+oc config set agents.entries.mail_reader.models '{"openai/gpt-5.4-nano":{"agentRuntime":{"id":"openclaw"}}}' --strict-json
 
 oc config set agents.entries.mail_reader.workspace '"/home/openclaw/.openclaw/workspace-mail-reader"' --strict-json
 oc config set agents.entries.mail_reader.sandbox '{"mode":"all","scope":"session","workspaceAccess":"none"}' --strict-json
