@@ -212,12 +212,17 @@ Give Ichabod its instructions, its agent roster, and its durable queue.
 
 Reference: guide section [9](ICHABOD-GUIDE.md#9-identity-agents-and-workboard).
 
-- [ ] Write `AGENTS.md` — mission, the authority block naming the host, bot GitHub login, mailbox, and hostname wildcard concretely, operating rules, and initiative.
-- [ ] Write `SOUL.md` — voice and honesty rules, under a page, no whimsy.
-- [ ] Write `IDENTITY.md` — name, emoji, how it signs email. A nameplate.
-- [ ] Write `USER.md` — Zach's address, timezone, quiet hours, expertise, tooling, and working preferences. No credentials.
-- [ ] Seed `MEMORY.md` and state the promotion rule in `AGENTS.md`: a daily-log lesson that still matters in a month becomes one line here.
-- [ ] Create `/srv/ichabod/templates/agent-workspace` and the `new-agent` script that refuses to finish when the resulting `AGENTS.md` is missing the authority block. Keep both in Git.
+The wizard already scaffolded `AGENTS.md`, `SOUL.md`, `IDENTITY.md`, `USER.md`, and `BOOTSTRAP.md` into the workspace. They are generic assistant boilerplate and several lines contradict this design, so replace them rather than editing around them.
+
+- [ ] Write `workspace/AGENTS.md` — mission, the authority block naming the host, bot GitHub login, mailbox, and hostname wildcard concretely, operating rules, and initiative. Say in it that Ichabod does not edit its own policy files.
+- [ ] Write `workspace/SOUL.md` — voice and honesty rules, under a page, no whimsy.
+- [ ] Write `workspace/IDENTITY.md` — name, emoji, how it signs email. A nameplate.
+- [ ] Write `workspace/USER.md` — Zach's address, expertise, tooling, and working preferences, as dated directives in the format the runtime parses. No credentials.
+- [ ] Seed `workspace/MEMORY.md` and state the promotion rule in `AGENTS.md`: a daily-log lesson that still matters in a month becomes one line here.
+- [ ] Create `templates/agent-workspace` and the `new-agent` script that refuses to finish when the resulting `AGENTS.md` is missing the authority block. Keep both in Git.
+- [ ] `scripts/deploy-workspace` to deploy all of it. The policy files overwrite; `USER.md` and `MEMORY.md` seed only.
+- [ ] Delete `BOOTSTRAP.md` from the workspace — it tells the agent to pick its own name and vibe, and Ichabod's identity is already decided. `scripts/deploy-workspace` removes it.
+- [ ] `openclaw agents set-identity --workspace <path> --name Ichabod --theme <theme> --emoji 🎃` so the Control UI and channels show the same identity. Never hand-edit `openclaw.json`.
 - [ ] Set `agents.ownership` to `explicit` and define the `ichabod` entry — workspace path, sandbox off.
 - [ ] Define the `mail_reader` entry — its own workspace, sandbox `all` scoped to the session with `workspaceAccess: none`, minimal tool profile allowing only `session_status` and `workboard_create`, denying fs, runtime, web, browser, cron, gateway, and nodes.
 - [ ] `openclaw plugins enable workboard`, then restart the Gateway.
@@ -225,6 +230,7 @@ Reference: guide section [9](ICHABOD-GUIDE.md#9-identity-agents-and-workboard).
 
 **Verify**
 
+- [ ] `templates/new-agent-test` passes, including the case where the authority block is stripped: non-zero exit and no half-made workspace left behind.
 - [ ] Workboard survives a reboot and shows linked execution history.
 - [ ] `ichabod` runs Docker directly with no approval.
 - [ ] `ichabod` creates a temporary worker and a durable agent without Zach approving the operation.

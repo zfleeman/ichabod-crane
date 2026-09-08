@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Proves new-agent fails loudly when the authority block is gone, which is the
+# only reason the script exists. Runs entirely in a temp directory.
+#
+# Usage: new-agent-test [path-to-template]   (default: ./agent-workspace)
+
+set -uo pipefail
+
+here="$(cd "$(dirname "$0")" && pwd)"
+source_template="${1:-$here/agent-workspace}"
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+
+pass=0 fail=0
+check() { # check <description> <condition-exit-code>
+  if [ "$2" -eq 0 ]; then pass=$((pass + 1)); echo "ok   - $1"
+  else fail=$((fail + 1)); echo "FAIL - $1"; fi
+}
+
+run() { TEMPLATE_DIR="$1" WORKSPACE_ROOT="$tmp/workspaces" "$here/new-agent" "$2" >"$tmp/out" 2>&1; }
+
+cp -R "$source_template" "$tmp/good"
+
+# A template with the whole Authority section cut out, which is the mistake
+# this script is meant to catch.
+cp -R "$tmp/good" "$tmp/stripped"
+awk '/^# Authority$/ {skip=1; next} /^# / {skip=0} !skip' \
+  "$tmp/good/AGENTS.md" > "$tmp/stripped/AGENTS.md"
+
+echo "# happy path"
+run "$tmp/good" scout
+check "intact template exits 0" $?
+[ -f "$tmp/workspaces/scout/AGENTS.md" ]; check "workspace was created" $?
+grep -q "scout" "$tmp/workspaces/scout/AGENTS.md"; check "agent name was substituted" $?
+grep -q "{{AGENT_NAME}}" "$tmp/workspaces/scout/AGENTS.md"; [ $? -ne 0 ]; check "no placeholder left behind" $?
+[ -d "$tmp/workspaces/scout/memory" ]; check "memory/ was created" $?
+
+echo "# the check that matters"
+run "$tmp/stripped" ghostwriter
+[ $? -ne 0 ]; check "stripped template exits non-zero" $?
+[ ! -e "$tmp/workspaces/ghostwriter" ]; check "no half-made workspace left behind" $?
+grep -q "authority block" "$tmp/out"; check "says why it refused" $?
+
+echo "# guards"
+run "$tmp/good" scout; [ $? -ne 0 ]; check "refuses an existing workspace" $?
+run "$tmp/good" "Bad Name"; [ $? -ne 0 ]; check "refuses an invalid name" $?
+
+echo
+echo "$pass passed, $fail failed"
+[ "$fail" -eq 0 ]

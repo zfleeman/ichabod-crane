@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Runs on the box as root, unpacked from the payload `make identity` sends.
+# Installs the policy files Zach owns and seeds the ones Ichabod owns.
+
+set -euo pipefail
+
+src="$(cd "$(dirname "$0")/.." && pwd)"
+ws=/home/openclaw/.openclaw/workspace
+templates=/srv/ichabod/templates
+
+install -d -o openclaw -g openclaw "$ws" "$ws/memory" "$ws/skills" "$templates"
+
+# Zach's files. Overwritten every deploy: Git is the source of truth and the
+# box never edits them.
+for f in AGENTS.md SOUL.md IDENTITY.md; do
+  install -o openclaw -g openclaw -m 0644 "$src/workspace/$f" "$ws/$f"
+  echo "installed $ws/$f"
+done
+
+# Ichabod's files. Seeded once and never clobbered again — after the first
+# deploy these hold memory that only exists on the box.
+for f in USER.md MEMORY.md; do
+  if [ -e "$ws/$f" ]; then
+    echo "kept     $ws/$f (agent-owned)"
+  else
+    install -o openclaw -g openclaw -m 0644 "$src/workspace/$f" "$ws/$f"
+    echo "seeded   $ws/$f"
+  fi
+done
+
+# The wizard's birth ritual asks the agent to choose its own name and vibe.
+# Ichabod's identity is decided, so the file can only cause drift.
+if [ -e "$ws/BOOTSTRAP.md" ]; then
+  rm -f "$ws/BOOTSTRAP.md"
+  echo "removed  $ws/BOOTSTRAP.md"
+fi
+
+rm -rf "$templates/agent-workspace"
+cp -R "$src/templates/agent-workspace" "$templates/agent-workspace"
+install -o openclaw -g openclaw -m 0755 "$src/templates/new-agent" "$templates/new-agent"
+install -o openclaw -g openclaw -m 0755 "$src/templates/new-agent-test" "$templates/new-agent-test"
+chown -R openclaw:openclaw "$templates"
+echo "installed $templates"
