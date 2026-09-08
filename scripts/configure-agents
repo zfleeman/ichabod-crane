@@ -75,13 +75,18 @@ oc config set agents.entries.mail_reader.sandbox '{"mode":"all","scope":"session
 # profile. Its deny list replaces the sandbox defaults rather than merging, so
 # it restates them.
 #
+# Two alsoAllow entries, at two layers, and both are needed. `allow` is a
+# restrictive filter over global policy; `alsoAllow` is the additive one that
+# puts a tool on top of the profile. Profile "minimal" is session_status only,
+# so workboard_create has to be added, not merely permitted.
+#
 # alsoAllow is why the card tool works at all. The sandbox allow list is a
 # fixed set (exec, read, write, sessions_*, session_status) with no plugin
 # tools in it, and the effective set is the agent policy intersected with it —
 # so allowing workboard_create at the agent layer alone left mail_reader with
 # session_status and nothing else: a membrane that could not pass anything
 # through. alsoAllow adds it to the sandbox side of that intersection.
-oc config set agents.entries.mail_reader.tools '{"profile":"minimal","allow":["session_status","workboard_create"],"deny":["group:fs","group:runtime","group:web","browser","cron","gateway","nodes"],"sandbox":{"tools":{"alsoAllow":["workboard_create"],"deny":["exec","process","read","write","edit","apply_patch","browser","canvas","computer","mobile_ui","nodes","automations","gateway","feishu","googlechat","nostr","buzz","msteams","mattermost","nextcloud-talk","matrix","raft","a2a","line","zalo","clickclack","zalouser","sms","synology-chat","tlon","discord","imessage","irc","reef","signal","slack","telegram","twitch","whatsapp"]}}}' --strict-json
+oc config set agents.entries.mail_reader.tools '{"profile":"minimal","allow":["session_status","workboard_create"],"alsoAllow":["workboard_create"],"deny":["group:fs","group:runtime","group:web","browser","cron","gateway","nodes"],"sandbox":{"tools":{"alsoAllow":["workboard_create"],"deny":["exec","process","read","write","edit","apply_patch","browser","canvas","computer","mobile_ui","nodes","automations","gateway","feishu","googlechat","nostr","buzz","msteams","mattermost","nextcloud-talk","matrix","raft","a2a","line","zalo","clickclack","zalouser","sms","synology-chat","tlon","discord","imessage","irc","reef","signal","slack","telegram","twitch","whatsapp"]}}}' --strict-json
 
 oc config validate
 
