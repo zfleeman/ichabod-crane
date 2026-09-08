@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Create a durable agent workspace from the version-controlled template.
+#
+# Nothing in OpenClaw enforces that a new agent inherits Ichabod's boundaries,
+# so this script is the enforcement: it refuses to leave a workspace behind
+# whose AGENTS.md does not name the authority block concretely.
+#
+# Usage: new-agent <name>
+
+set -euo pipefail
+
+# Overridable so new-agent-test can run against throwaway directories.
+TEMPLATE_DIR="${TEMPLATE_DIR:-/srv/ichabod/templates/agent-workspace}"
+WORKSPACE_ROOT="${WORKSPACE_ROOT:-/home/openclaw/.openclaw/workspaces}"
+
+# Every one of these must appear in the finished AGENTS.md. They are the
+# concrete boundary: the GitHub identity, the mailbox, and the hostnames.
+# A boundary an agent has to infer is not a boundary.
+REQUIRED_STRINGS=(
+  "# Authority"
+  "ich4bod"
+  "ichabod@ichabod-crane.net"
+  "*.ichabod-crane.net"
+)
+
+die() { echo "new-agent: $*" >&2; exit 1; }
+
+[ $# -eq 1 ] || die "usage: new-agent <name>"
+name="$1"
+
+# Agent ids show up in config keys, paths, and routing, so keep them boring.
+[[ "$name" =~ ^[a-z][a-z0-9_-]{1,31}$ ]] ||
+  die "invalid name '$name': lowercase letter first, then a-z 0-9 _ - (2-32 chars)"
+
+[ -d "$TEMPLATE_DIR" ] || die "template directory not found: $TEMPLATE_DIR"
+[ -f "$TEMPLATE_DIR/AGENTS.md" ] || die "template has no AGENTS.md: $TEMPLATE_DIR"
+
+target="$WORKSPACE_ROOT/$name"
+[ -e "$target" ] && die "workspace already exists: $target"
+
+mkdir -p "$target"
+# Past this point the workspace is ours to remove if verification fails.
+cleanup() { rm -rf "$target"; }
+
+cp -R "$TEMPLATE_DIR/." "$target/"
+# sed -i takes a mandatory suffix on BSD and an optional one on GNU, so pass a
+# suffix and clean up after it. Zach reviews this on macOS; it runs on Linux.
+find "$target" -type f -name '*.md' -exec sed -i.bak "s/{{AGENT_NAME}}/$name/g" {} +
+find "$target" -type f -name '*.md.bak' -delete
+mkdir -p "$target/memory" "$target/skills"
+
+# Verify the result, not the template: a substitution or a bad copy can lose
+# the block even when the template is intact.
+missing=()
+for needle in "${REQUIRED_STRINGS[@]}"; do
+  grep -qF -- "$needle" "$target/AGENTS.md" || missing+=("$needle")
+done
+
+if [ ${#missing[@]} -gt 0 ]; then
+  cleanup
+  echo "new-agent: refusing to create '$name' — AGENTS.md is missing the authority block." >&2
+  for needle in "${missing[@]}"; do echo "  missing: $needle" >&2; done
+  echo "Fix $TEMPLATE_DIR/AGENTS.md and run again. No workspace was left behind." >&2
+  exit 1
+fi
+
+echo "workspace ready: $target"
+echo
+echo "Next, register the agent and give it an identity:"
+echo "  openclaw agents add $name --non-interactive --workspace $target"
+echo "  openclaw agents set-identity --workspace $target --name <Name> --emoji <emoji>"
+echo
+echo "Then write its mission into $target/AGENTS.md. The authority block stays as it is."
