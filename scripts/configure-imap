@@ -77,10 +77,29 @@ sudo -iu openclaw systemctl --user is-active openclaw-gateway
 
 # The account is skipped in silence if this ref does not resolve, so this check
 # is the difference between a working intake and a mailbox that looks quiet.
-oc secrets audit --check
+#
+# `secrets audit --check` is not the check to use: it exits non-zero on any
+# finding at all, including pre-existing plaintext ones that have nothing to do
+# with intake, so it fails a run that worked. Only unresolved refs matter here.
+audit="$(oc secrets audit 2>&1)"
+echo "$audit"
+echo "$audit" | grep -q "unresolved=0" \
+  || { echo "unresolved SecretRef: the imap account would be skipped in silence" >&2; exit 1; }
 
 echo "=== imap ==="
 oc plugins list | grep -i imap
+
+# A valid config and a working mailbox are different claims. The watcher only
+# authenticates a few seconds after the Gateway is up, and a wrong or
+# wrong-scoped app password shows up nowhere but here.
+sleep 20
+if sudo -iu openclaw journalctl --user -u openclaw-gateway --since "-3 minutes" --no-pager 2>/dev/null \
+     | grep -qE "imap: account=ichabod.*(connection failed|reauthentication)"; then
+  echo "imap: the account did not authenticate against the mail provider." >&2
+  echo "The config is written and valid; the credential is what needs fixing." >&2
+  exit 1
+fi
+echo "imap: account authenticated, watcher running"
 REMOTE
 
 payload="$(printf '%s' "$remote_script" | base64 | tr -d '\n')"
