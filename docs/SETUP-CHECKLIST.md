@@ -265,7 +265,7 @@ Mail arrives, the sender is authenticated, and the body reaches nothing but the 
 
 **Verify**
 
-- [ ] Zach's fresh authenticated message creates exactly one triage card, carrying the sender and the request in the reader's own words — and carrying no identifier at all, since the reader is given none. A `Message-ID` on the card is a red flag, not a success.
+- [ ] Zach's fresh authenticated message creates exactly one triage card, carrying the sender, the request in the reader's own words, and the `sessionKey` from `session_status` copied verbatim. A `Message-ID` or a received time on the card is a red flag, not a success — the reader is given neither, so anything that looks like one was invented.
 - [ ] Restarting the Gateway does not replay the old inbox, and re-presenting a message that was already handled produces no second card. The plugin does this itself, in three layers: a per-account cursor (`uidValidity` + `lastSeenUid`, baselined to the current end of the mailbox on first watch, so no backfill), a ring of the last 100 `Message-ID`s per account, and a UID claim with a seven-day TTL. Skips are logged as `duplicate-message-id` and `duplicate-uid`.
 - [ ] Understand where that guarantee stops. It is the *plugin* that deduplicates, not the board — `workboard_create` accepts an `idempotencyKey` and stores it without ever reading it back. So anything that reaches `mail_reader` by another route, or a message older than the last 100, can still produce a second card. There is no `Message-ID` on the card to fall back on: the plugin never passes one to the reader. Correlating a card back to its message is unsolved and tracked separately.
 - [ ] A spoofed or nonallowlisted sender creates no model run at all. The gate runs before dispatch and rejects in this order: not exactly one `From` header and address (`invalid-from`), sender not in `allowedSenders` (`sender-not-allowed`), message older than 48 hours (`message-too-old`), then authentication strength below `senderAuth.min`.
@@ -280,7 +280,7 @@ Cards written by `mail_reader` are not yet constrained — the reader can set `s
 The one piece of plumbing to build rather than configure. The IMAP plugin is receive-only, so sending is a tool we own.
 
 - [ ] Build the outbound SMTP tool: submission on 587 with STARTTLS, the password read through a SecretRef, envelope sender and header `From` both `ichabod@ichabod-crane.net`.
-- [ ] Settle threading before building the reply path. `In-Reply-To` and `References` need the original's `Message-ID`, and the card does not have one — the IMAP plugin does not pass it to the reader. Without it, replies start new conversations.
+- [ ] Set `In-Reply-To` and `References` by looking the original up rather than reading it off the card. The card records a session key of the form `hook:imap:<account>:<uidValidity>:<uid>`; fetch that UID with the mailbox tool and take the real `Message-ID` from the message. Verify the sender and subject match the card before trusting the key — it was written by the reader, which parses hostile text.
 - [ ] Give the tool a recipient allowlist holding only Zach — in the tool itself, not merely as an instruction in `AGENTS.md`.
 - [ ] Cap volume at one digest per day plus per-card completion notices. Treat SMTP `4xx` as retry with backoff and `5xx` as stop and record on the card.
 - [ ] Confirm the guest lane is **not** built. One allowlisted sender in version 1.
@@ -296,7 +296,7 @@ The one piece of plumbing to build rather than configure. The IMAP plugin is rec
 The plugin never touches the mailbox — no moves, no flag changes, no backfill of mail that predates watching. So nothing archives a handled request, nothing marks anything read, and nothing finds an email from last week. That gap is a second small tool.
 
 - [ ] Build the mailbox management tool over `imaplib`: archive a message, mark one read, search history, fetch one by `Message-ID`.
-- [ ] Decide how a card names its message. The tool addresses messages by `Message-ID`, and the card stores none, so "archive the message this card came from" has no answer yet.
+- [ ] Support addressing by UID as well as `Message-ID`. UID is what a triage card can name, via the session key it records, and is what makes "archive the message this card came from" work.
 - [ ] Grant it to `ichabod` only. It must not appear in `mail_reader`'s `tools.allow`, and it must never be the path by which unread mail first enters a session.
 
 **Verify**
