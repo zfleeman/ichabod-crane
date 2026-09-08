@@ -126,6 +126,13 @@ resource "aws_instance" "ichabod" {
   associate_public_ip_address = false
   disable_api_termination     = true
 
+  # Associating the Elastic IP makes AWS report the interface as having a public
+  # IP association, so this attribute reads back as true no matter what is set
+  # here. Without the ignore, every plan wants to replace the whole instance.
+  lifecycle {
+    ignore_changes = [associate_public_ip_address]
+  }
+
   # A predictable CPU ceiling instead of a surprise unlimited-mode bill.
   credit_specification {
     cpu_credits = "standard"
@@ -182,6 +189,54 @@ resource "aws_route53_record" "wildcard" {
   type    = "A"
   ttl     = 300
   records = [aws_eip.ichabod.public_ip]
+}
+
+# Mail, all of it Fastmail's. These were created by hand in the console during
+# the mailbox setup and imported afterwards, so the zone and this file agree.
+
+resource "aws_route53_record" "mx" {
+  zone_id = data.aws_route53_zone.ichabod.zone_id
+  name    = "ichabod-crane.net"
+  type    = "MX"
+  ttl     = 300
+  records = [
+    "10 us1-smtp.messagingengine.com",
+    "20 us2-smtp.messagingengine.com",
+  ]
+}
+
+# ?all rather than ~all or -all is Fastmail's own published value. DMARC below
+# is what actually enforces; SPF here is only one of its two inputs.
+resource "aws_route53_record" "spf" {
+  zone_id = data.aws_route53_zone.ichabod.zone_id
+  name    = "ichabod-crane.net"
+  type    = "TXT"
+  ttl     = 300
+  records = ["v=spf1 include:spf.messagingengine.com ?all"]
+}
+
+# Three selectors because Fastmail rotates between them. All three must resolve
+# or DKIM signing breaks on whichever one it reaches for.
+resource "aws_route53_record" "dkim" {
+  for_each = toset(["fm1", "fm2", "fm3"])
+
+  zone_id = data.aws_route53_zone.ichabod.zone_id
+  name    = "${each.key}._domainkey.ichabod-crane.net"
+  type    = "CNAME"
+  ttl     = 300
+  records = ["${each.key}.ichabod-crane.net.dkim.fmhosted.com"]
+}
+
+# p=reject with strict alignment. The domain sends only to Zach, so there are no
+# third-party senders to break, and a spoofed ichabod@ichabod-crane.net is
+# refused at the receiver rather than landing in his inbox. Reports go to the
+# mailbox itself, which means Ichabod can read its own delivery failures.
+resource "aws_route53_record" "dmarc" {
+  zone_id = data.aws_route53_zone.ichabod.zone_id
+  name    = "_dmarc.ichabod-crane.net"
+  type    = "TXT"
+  ttl     = 300
+  records = ["v=DMARC1; p=reject; adkim=s; aspf=s; rua=mailto:ichabod@ichabod-crane.net"]
 }
 
 # --- Alerting ----------------------------------------------------------------
