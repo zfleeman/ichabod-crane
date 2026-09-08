@@ -50,9 +50,21 @@ fi
 # minimal tool profile whose only useful mutation is creating a triage card.
 # The deny list is belt and braces: profile "minimal" should already exclude
 # these, but naming them means a future default change cannot quietly widen it.
+# Sonnet, not the Opus default. mail_reader does one bounded, well-specified
+# job on every admitted message, and the cheaper model is the right size for
+# it. Set per-agent rather than in the UI so a config restore brings it back.
+oc config set agents.entries.mail_reader.model '{"primary":"anthropic/claude-sonnet-5"}' --strict-json
+
 oc config set agents.entries.mail_reader.workspace '"/home/openclaw/.openclaw/workspace-mail-reader"' --strict-json
 oc config set agents.entries.mail_reader.sandbox '{"mode":"all","scope":"session","workspaceAccess":"none"}' --strict-json
 oc config set agents.entries.mail_reader.tools '{"profile":"minimal","allow":["session_status","workboard_create"],"deny":["group:fs","group:runtime","group:web","browser","cron","gateway","nodes"]}' --strict-json
+
+# The agent tool profile above and the sandbox tool policy are two different
+# layers. `sandbox explain` showed exec, read, write, edit and apply_patch
+# still allowed by the sandbox defaults, which is a shell inside the container
+# even though the profile is "minimal". mail_reader is the one agent that
+# reads text written by someone other than Zach, so close that layer too.
+oc config set agents.entries.mail_reader.tools.sandbox.tools.deny '["exec","process","write","edit","apply_patch","read"]' --strict-json
 
 oc config validate
 
