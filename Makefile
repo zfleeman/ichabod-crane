@@ -6,6 +6,10 @@
 # `make status AWS_PROFILE=SHPO`.
 export AWS_PROFILE ?= ZACH-ROOT
 
+# AWS CLI v2 pipes anything long through `less` by default, so a `--output table`
+# result sits there until you `:q`. Empty means "no pager, just print it".
+export AWS_PAGER =
+
 # Recursive assignment on purpose: `make help` should not need a built instance.
 INSTANCE_ID = $(shell tofu -chdir=tofu output -raw instance_id)
 GATEWAY_PORT = 18789
