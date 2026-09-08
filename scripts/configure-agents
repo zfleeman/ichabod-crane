@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+# Write the agent roster into openclaw.json and restart the Gateway.
+#
+# Run from a checkout, on Zach's laptop. Everything here is idempotent, so
+# rerunning it after a config restore is the intended way to get back to a
+# known roster rather than clicking through the Control UI.
+#
+# `openclaw config set` is the typed way to write openclaw.json — the checklist
+# rule is that the file is never hand-edited. Values are passed as JSON with
+# --strict-json because plain value mode reports success without validating.
+#
+# Usage: scripts/configure-agents
+
+set -euo pipefail
+
+export AWS_PROFILE="${AWS_PROFILE:-ZACH-ROOT}"
+export AWS_PAGER=""
+
+cd "$(dirname "$0")/.."
+instance="$(tofu -chdir=tofu output -raw instance_id)"
+
+# The remote half. Written here as a plain script so the quoting stays legible;
+# it rides over base64 the same way install-workspace does.
+read -r -d '' remote_script <<'REMOTE' || true
+set -euo pipefail
+oc() { sudo -iu openclaw openclaw "$@"; }
+
+# A dated backup before the first write, so a bad roster is one cp away from
+# being undone. Kept alongside the ones earlier sections left.
+sudo -iu openclaw cp /home/openclaw/.openclaw/openclaw.json \
+  "/home/openclaw/.openclaw/openclaw.json.pre-agents-$(date +%Y%m%d-%H%M%S)"
+
+# Explicit ownership: an agent exists because it is listed here, not because
+# something inferred it from a workspace directory on disk.
+oc config set agents.ownership '"explicit"' --strict-json
+
+# ichabod: unsandboxed on purpose. Section 8 already set tools.exec.*; this is
+# the per-agent half of the same decision.
+oc config set agents.entries.ichabod.workspace '"/home/openclaw/.openclaw/workspace"' --strict-json
+oc config set agents.entries.ichabod.sandbox '{"mode":"off"}' --strict-json
+
+# mail_reader: registered only if it is not already in the roster. `agents add`
+# fails on an existing id, and this script has to be safe to rerun.
+if ! oc agents list 2>/dev/null | grep -q mail_reader; then
+  oc agents add mail_reader --non-interactive \
+    --workspace /home/openclaw/.openclaw/workspace-mail-reader
+fi
+
+# The membrane. Sandboxed to the session with no workspace access, and a
+# minimal tool profile whose only useful mutation is creating a triage card.
+# The deny list is belt and braces: profile "minimal" should already exclude
+# these, but naming them means a future default change cannot quietly widen it.
+# mail_reader runs a cheap OpenAI model on OpenClaw's own runtime, and that
+# second half is the point. Under a CLI backend (claude-cli, or the Codex
+# harness OpenAI picks by default) the harness brings its own tools, runs as
+# the openclaw host user, and OpenClaw never applies sandbox.mode or the tool
+# profile. Pinning agentRuntime to "openclaw" is what makes the sandbox and
+# the deny lists below real rather than decorative.
+#
+# fallbacks is deliberately empty. A fallback to any anthropic model would put
+# this agent back on claude-cli the moment OpenAI is unreachable, silently
+# un-sandboxing the one agent that reads untrusted mail. Better it fails.
+oc config set agents.entries.mail_reader.model '{"primary":"openai/gpt-5.4-nano","fallbacks":[]}' --strict-json
+oc config set agents.entries.mail_reader.models '{"openai/gpt-5.4-nano":{"agentRuntime":{"id":"openclaw"}}}' --strict-json
+
+oc config set agents.entries.mail_reader.workspace '"/home/openclaw/.openclaw/workspace-mail-reader"' --strict-json
+oc config set agents.entries.mail_reader.sandbox '{"mode":"all","scope":"session","workspaceAccess":"none"}' --strict-json
+# One object, not two calls. Setting `.tools` wholesale replaces the subtree,
+# so a separate `.tools.sandbox...` call afterwards means every run reports a
+# change: the first write drops what the second puts back.
+#
+# Two layers here. `profile`/`allow`/`deny` is the agent tool policy. The
+# nested `sandbox` block is the sandbox's own policy, which is separate and was
+# still allowing exec, read and write inside the container under a "minimal"
+# profile. Its deny list replaces the sandbox defaults rather than merging, so
+# it restates them.
+#
+# profile + alsoAllow, with no `allow`. The validator rejects both in one
+# scope: "agent tools cannot set both allow and alsoAllow in the same scope".
+# `allow` is a restrictive filter over global policy and `alsoAllow` is the
+# additive one, so with profile "minimal" (session_status only) the card tool
+# has to be added rather than permitted. `allow` was doing nothing.
+#
+# `gateway` is denied at the agent layer but NOT in the sandbox deny list, and
+# that asymmetry is load-bearing. workboard_create is a Gateway RPC call, so
+# denying gateway inside the sandbox removes the one tool this agent exists to
+# use — while denying it at the agent layer costs nothing. Found by bisecting:
+# the agent-layer deny is harmless, the sandbox-layer deny is not.
+#
+# alsoAllow is why the card tool works at all. The sandbox allow list is a
+# fixed set (exec, read, write, sessions_*, session_status) with no plugin
+# tools in it, and the effective set is the agent policy intersected with it —
+# so allowing workboard_create at the agent layer alone left mail_reader with
+# session_status and nothing else: a membrane that could not pass anything
+# through. alsoAllow adds it to the sandbox side of that intersection.
+oc config set agents.entries.mail_reader.tools '{"profile":"minimal","alsoAllow":["workboard_create"],"deny":["group:fs","group:runtime","group:web","browser","cron","gateway","nodes"],"sandbox":{"tools":{"alsoAllow":["workboard_create"],"deny":["exec","process","read","write","edit","apply_patch","browser","canvas","computer","mobile_ui","nodes","automations","feishu","googlechat","nostr","buzz","msteams","mattermost","nextcloud-talk","matrix","raft","a2a","line","zalo","clickclack","zalouser","sms","synology-chat","tlon","discord","imessage","irc","reef","signal","slack","telegram","twitch","whatsapp"]}}}' --strict-json
+
+oc config validate
+
+# Config is read at start, so the roster is not live until this returns.
+sudo -iu openclaw systemctl --user restart openclaw-gateway
+sleep 5
+sudo -iu openclaw systemctl --user is-active openclaw-gateway
+
+echo "=== roster ==="
+oc agents list
+REMOTE
+
+payload="$(printf '%s' "$remote_script" | base64 | tr -d '\n')"
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+
+remote="echo $payload | base64 -d > /tmp/configure-agents.sh && bash /tmp/configure-agents.sh"
+printf '{"commands":["%s"]}' "$remote" > "$tmp/params.json"
+
+command_id="$(aws ssm send-command --instance-ids "$instance" \
+  --document-name AWS-RunShellScript \
+  --parameters "file://$tmp/params.json" \
+  --query Command.CommandId --output text)"
+echo "sent $command_id, waiting..."
+
+status=Pending
+for _ in $(seq 45); do
+  status="$(aws ssm get-command-invocation --command-id "$command_id" --instance-id "$instance" \
+    --query Status --output text 2>/dev/null || echo Pending)"
+  case "$status" in InProgress | Pending | Delayed) sleep 2 ;; *) break ;; esac
+done
+
+aws ssm get-command-invocation --command-id "$command_id" --instance-id "$instance" \
+  --query '[StandardOutputContent,StandardErrorContent]' --output text
+
+[ "$status" = "Success" ] || { echo "configure failed: $status" >&2; exit 1; }

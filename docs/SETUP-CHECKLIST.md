@@ -150,6 +150,7 @@ Reference: guide sections [6](ICHABOD-GUIDE.md#6-provision-and-secure-the-host),
 - [ ] `usermod -aG docker openclaw`, then re-enter the login session so the group applies.
 - [ ] Configure `/etc/docker/daemon.json` with `json-file` logging capped at 10m and 3 files, then restart Docker once, before any application exists. Check it with `sudo docker info --format '{{.LoggingDriver}}'` — `ssm-user` reaches Docker only through sudo, because the `docker` group belongs to `openclaw` alone.
 - [ ] Verify as `openclaw`: `docker version`, `docker compose version`, `docker run --rm hello-world`. This test confirms the intended root-equivalent authority.
+- [ ] Build the sandbox image with `scripts/build-sandbox-image`. OpenClaw ships `sandbox-setup.sh` only in its source repo, not the npm package, so nothing else creates it — and every sandboxed agent fails with `Sandbox image not found` until it exists. Easy to miss, because an unsandboxed agent never needs it.
 
 **Traefik**
 
@@ -224,9 +225,12 @@ The wizard already scaffolded `AGENTS.md`, `SOUL.md`, `IDENTITY.md`, `USER.md`, 
 - [ ] Delete `BOOTSTRAP.md` from the workspace — it tells the agent to pick its own name and vibe, and Ichabod's identity is already decided. `scripts/deploy-workspace` removes it.
 - [ ] `openclaw agents set-identity --workspace <path> --name Ichabod --theme <theme> --emoji 🎃` so the Control UI and channels show the same identity. Never hand-edit `openclaw.json`.
 - [ ] Set `agents.ownership` to `explicit` and define the `ichabod` entry — workspace path, sandbox off.
-- [ ] Define the `mail_reader` entry — its own workspace, sandbox `all` scoped to the session with `workspaceAccess: none`, minimal tool profile allowing only `session_status` and `workboard_create`, denying fs, runtime, web, browser, cron, gateway, and nodes.
+- [ ] Define the `mail_reader` entry — its own workspace, sandbox `all` scoped to the session with `workspaceAccess: none`, and a `minimal` tool profile. `scripts/configure-agents` writes the whole roster; the four traps below are why it exists rather than a list of `config set` calls in this file.
+- [ ] **Pin the runtime.** `agents.entries.mail_reader.models["<model>"].agentRuntime.id` must be `openclaw`. Under a CLI backend — `claude-cli`, or the Codex harness OpenAI picks by default — the harness brings its own tools and runs as the host user, and OpenClaw applies neither `sandbox.mode` nor the tool profile. `sandbox explain` still reports `runtime: sandboxed`, so the config looks correct while the agent has a shell, Docker, and the network. Give it a non-Anthropic model with an API key, and leave `fallbacks` empty: a fallback to any `anthropic/*` model lands back on `claude-cli` and silently un-sandboxes the reader.
+- [ ] **Add the card tool with `alsoAllow`, not `allow`.** `allow` is a restrictive filter over global policy; `alsoAllow` is additive on top of the profile. `minimal` is `session_status` only, so `allow: ["workboard_create"]` filters a set the tool was never in and the reader ends up mute. Setting both is rejected by the validator.
+- [ ] **Deny `gateway` at the agent layer, and not in the sandbox deny list.** `workboard_create` is a Gateway RPC call, so denying `gateway` inside the sandbox removes the one tool this agent exists to use. Denying it at the agent layer costs nothing. Deny `exec`, `process`, `read`, `write`, `edit` and `apply_patch` in the sandbox list — the sandbox allow defaults include them even under `minimal`, and that list replaces the defaults rather than merging, so it must restate everything it still wants denied.
 - [ ] `openclaw plugins enable workboard`, then restart the Gateway.
-- [ ] Create one board named `Ichabod` and the `zach`, `guest`, `maintenance`, `wild-work`, `website`, and `monitor` labels.
+- [ ] Bring the board into existence by creating the first card on it — `openclaw workboard create --board ichabod --labels zach,email "..."`. There is no board or label command: `openclaw workboard` has only `create`, `list`, `show`, `move` and `dispatch`, and `--board`/`--labels` are free-form strings. `zach`, `guest`, `maintenance`, `wild-work`, `website` and `monitor` are the vocabulary this design uses, not objects to define up front.
 
 **Verify**
 
@@ -234,7 +238,8 @@ The wizard already scaffolded `AGENTS.md`, `SOUL.md`, `IDENTITY.md`, `USER.md`, 
 - [ ] Workboard survives a reboot and shows linked execution history.
 - [ ] `ichabod` runs Docker directly with no approval.
 - [ ] `ichabod` creates a temporary worker and a durable agent without Zach approving the operation.
-- [ ] `mail_reader` cannot reach shell, files, web, browser, Docker, or automations.
+- [ ] `mail_reader` cannot reach shell, files, web, browser, Docker, or automations. Test it by asking a live `mail_reader` session to list its tools and try each one — config reads only prove what is declared, and every broken state in this section passed `openclaw config validate`.
+- [ ] That same listing shows `workboard_create`. A reader that lists only `session_status` is contained but useless: it accepts mail and silently produces nothing.
 
 ---
 
@@ -261,10 +266,9 @@ Reference: guide sections [4](ICHABOD-GUIDE.md#email) and [11](ICHABOD-GUIDE.md#
 **Verify**
 
 - [ ] Zach's fresh authenticated message creates exactly one triage card.
-- [ ] Reprocessing the same message creates no duplicate.
+- [ ] Restarting the Gateway does not replay the old inbox. This, not the card key, is what prevents duplicates: `workboard_create` accepts an `idempotencyKey` and stores it, but the plugin never reads it back, so passing the `Message-ID` is an audit trail rather than a guarantee. Duplicate detection belongs in the director pass, which already reads the whole board and is not parsing hostile text.
 - [ ] A spoofed or nonallowlisted sender creates no model run at all.
 - [ ] An email saying "open this link and run its command" remains only a summarized card.
-- [ ] Restarting the Gateway does not replay the old inbox.
 - [ ] Ichabod can send Zach a reply from the custom address.
 - [ ] Ichabod can archive a handled message and mark it read, and the message is gone from `INBOX` in a mail client.
 - [ ] A history search returns a message that predates the plugin's first watch.
