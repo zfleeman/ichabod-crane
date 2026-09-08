@@ -1472,7 +1472,7 @@ Stopping EC2 does not stop EBS, snapshot, Elastic IP, domain, or other noncomput
 | Forward opens but UI does not | Gateway service, loopback listener, port conflict, Gateway auth |
 | Claude fails | `claude auth status --text`, quota, CLI version, service `PATH` |
 | Email creates no card | IMAP watcher, allowlist, DMARC evidence, baseline behavior, reader transcript |
-| Duplicate mail card | Workboard idempotency key and IMAP message identity |
+| Duplicate mail card | IMAP trigger replay (it should not backfill or replay on restart), then the director pass — the Workboard idempotency key is stored but never read back, so it deduplicates nothing |
 | Workboard does not dispatch | Gateway, card status, assignment, dependencies, worker policy, concurrency |
 | App hostname does not resolve | Authoritative nameservers, apex/wildcard A records, Elastic IP |
 | HTTPS fails | Ports 80/443, Traefik logs, router labels, ACME email/storage, DNS |
