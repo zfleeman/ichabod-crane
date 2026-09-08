@@ -1,0 +1,143 @@
+#!/usr/bin/env bash
+# Ship the built smtp-send plugin to the box, install it, and write its config.
+#
+# Run from a checkout, on Zach's laptop, after `npm run plugin:build` in
+# plugins/smtp-send. Idempotent: rerunning replaces the installed copy and
+# rewrites the same config.
+#
+# Usage: scripts/install-smtp-plugin
+
+set -euo pipefail
+
+export AWS_PROFILE="${AWS_PROFILE:-ZACH-ROOT}"
+export AWS_PAGER=""
+
+cd "$(dirname "$0")/.."
+plugin=plugins/smtp-send
+[ -f "$plugin/dist/index.js" ] || {
+  echo "no build output — run: (cd $plugin && npm install && npm run plugin:build)" >&2
+  exit 1
+}
+
+instance="$(tofu -chdir=tofu output -raw instance_id)"
+
+# The lock file is 224 KB, well past the 100 KB SSM parameter limit, so the box
+# resolves the two runtime dependencies itself. Versions are pinned to exactly
+# what this checkout resolved, so the box gets the tree that the tests ran
+# against rather than whatever npm feels like today.
+staging="$(mktemp -d)"
+trap 'rm -rf "$staging"' EXIT
+mkdir -p "$staging/smtp-send"
+cp -R "$plugin/dist" "$staging/smtp-send/dist"
+cp "$plugin/openclaw.plugin.json" "$staging/smtp-send/openclaw.plugin.json"
+
+python3 - "$plugin" "$staging/smtp-send/package.json" <<'PY'
+import json, pathlib, sys
+src, dest = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+pkg = json.loads((src / "package.json").read_text())
+pinned = {}
+for name in pkg["dependencies"]:
+    installed = json.loads((src / "node_modules" / name / "package.json").read_text())
+    pinned[name] = installed["version"]
+dest.write_text(json.dumps({
+    "name": pkg["name"],
+    "version": pkg["version"],
+    "type": "module",
+    "private": True,
+    "dependencies": pinned,
+    "openclaw": pkg["openclaw"],
+}, indent=2) + "\n")
+print("pinned:", ", ".join(f"{k}@{v}" for k, v in pinned.items()), file=sys.stderr)
+PY
+
+payload="$(COPYFILE_DISABLE=1 tar --no-xattrs -czf - -C "$staging" smtp-send | base64 | tr -d '\n')"
+
+read -r -d '' remote_script <<'REMOTE' || true
+set -euo pipefail
+oc() { sudo -iu openclaw openclaw "$@"; }
+
+sudo -iu openclaw cp /home/openclaw/.openclaw/openclaw.json \
+  "/home/openclaw/.openclaw/openclaw.json.pre-smtp-$(date +%Y%m%d-%H%M%S)"
+
+sudo -iu openclaw mkdir -p /home/openclaw/plugins
+sudo -iu openclaw rm -rf /home/openclaw/plugins/smtp-send
+sudo -iu openclaw tar xzf /tmp/smtp-send.tgz -C /home/openclaw/plugins
+sudo -iu openclaw sh -c 'cd /home/openclaw/plugins/smtp-send && npm install --omit=dev --no-audit --no-fund --loglevel=error'
+
+# --force is required for any local path: OpenClaw refuses sources outside
+# ClawHub review without it. The source here is plugins/smtp-send in this repo,
+# built and tested in the same commit that ships it.
+# --accept-capabilities consents to the plugin's declared surface. For this
+# plugin that surface is one entry — contracts.tools: ["smtp_send"] — with no
+# hooks, HTTP routes or channels. OpenClaw re-prompts if the surface ever
+# changes, so this consent does not silently cover a future version.
+oc plugins install /home/openclaw/plugins/smtp-send --force --accept-capabilities
+
+# The config write below is validated against the plugin registry, and the
+# registry does not know this plugin's manifest until the Gateway reloads. Skip
+# this restart and the write fails with `password: must be string`, because the
+# contract declaring password as a SecretRef surface has not been read yet.
+sudo -iu openclaw systemctl --user restart openclaw-gateway
+sleep 8
+
+# password is a SecretRef. It resolves before the plugin sees it, so the value
+# never reaches openclaw.json, a transcript, or model context. This only works
+# because the manifest declares configContracts.secretInputs for this path —
+# without that the runtime type-checks the unresolved ref object against
+# "password": string and rejects the whole config.
+#
+# from is both the envelope sender and the header From address; a mismatch is
+# what breaks DMARC alignment. fromName decorates the header only — the
+# envelope stays a bare address. allowedRecipients is enforced inside the tool rather
+# than by instruction, because the card that triggers a send may have been
+# written from an injected email.
+oc config set plugins.entries.smtp-send.config '{
+  "host": "smtp.fastmail.com",
+  "port": 587,
+  "secure": false,
+  "user": "ichabod@ichabod-crane.net",
+  "password": {"source":"store","provider":"default","id":"EMAIL_PASSWORD"},
+  "from": "ichabod@ichabod-crane.net",
+  "fromName": "Ichabod Crane",
+  "allowedRecipients": ["zfleeman@gmail.com"],
+  "maxPerHour": 12
+}' --strict-json
+
+oc plugins enable smtp-send --accept-capabilities
+oc config validate
+
+sudo -iu openclaw systemctl --user restart openclaw-gateway
+sleep 8
+sudo -iu openclaw systemctl --user is-active openclaw-gateway
+
+echo "=== plugin ==="
+oc plugins list | grep -i "smtp-send" || echo "smtp-send NOT LISTED"
+
+# An unresolved ref would make every send fail at call time; catch it here.
+audit="$(oc secrets audit 2>&1)"
+echo "$audit" | head -1
+echo "$audit" | grep -q "unresolved=0" \
+  || { echo "unresolved SecretRef: smtp_send would fail on every call" >&2; exit 1; }
+REMOTE
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp" "$staging"' EXIT
+
+script_b64="$(printf '%s' "$remote_script" | base64 | tr -d '\n')"
+remote="echo $payload | base64 -d > /tmp/smtp-send.tgz && echo $script_b64 | base64 -d > /tmp/install-smtp.sh && bash /tmp/install-smtp.sh"
+printf '{"commands":["%s"]}' "$remote" > "$tmp/params.json"
+
+command_id="$(aws ssm send-command --instance-ids "$instance" \
+  --document-name AWS-RunShellScript \
+  --parameters "file://$tmp/params.json" \
+  --query Command.CommandId --output text)"
+echo "sent $command_id, waiting..."
+
+aws ssm wait command-executed --command-id "$command_id" --instance-id "$instance" 2>/dev/null || true
+
+aws ssm get-command-invocation --command-id "$command_id" --instance-id "$instance" \
+  --query '[StandardOutputContent,StandardErrorContent]' --output text
+
+status="$(aws ssm get-command-invocation --command-id "$command_id" --instance-id "$instance" \
+  --query Status --output text)"
+[ "$status" = "Success" ] || { echo "install-smtp-plugin failed: $status" >&2; exit 1; }
