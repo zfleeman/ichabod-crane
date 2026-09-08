@@ -493,6 +493,17 @@ Every command Zach runs by hand lives in the `Makefile` at the repository root, 
 - `make ui` — forwards the loopback Gateway to `http://127.0.0.1:18789` on the laptop.
 - `make status` — asks SSM whether the instance is `Online`.
 
+The rest either drive the instance's power state or answer a question about it without opening a session:
+
+- `make start` / `make stop` — power the instance on or off. Both wait for the change to finish; `start` waits for SSM to answer, not just for EC2 to report `running`, because everything else here needs SSM. Stopping keeps the root volume and the Elastic IP, so the box comes back as it was and only the EBS and address charges continue.
+- `make state` — `running` or `stopped`, straight from EC2. `make status` returns nothing at all while the instance is off, which reads like a broken agent rather than a stopped machine.
+- `make ip` — the Elastic IP.
+- `make console` — the serial console, which is the one thing still readable when SSM will not answer.
+- `make alarms` — the current state of every `ichabod-` CloudWatch alarm.
+- `make ami` — the latest Canonical Ubuntu 24.04 AMI ID for `us-east-2`, for refreshing the pinned `ami_id`.
+
+Every target runs against the `ZACH-ROOT` AWS profile. The Makefile exports `AWS_PROFILE` rather than passing `--profile`, so `tofu` reads it too; override it for a single run with `make status AWS_PROFILE=SHPO`.
+
 ## Open the Control UI
 
 `make ui` opens the forward. Leave that terminal open and browse to `http://127.0.0.1:18789/`. The SSM tunnel protects the network path, and OpenClaw's own token/password and browser pairing still apply. This is the same shape as the SSH tunnel in OpenClaw's docs, with SSM carrying the forward. See [OpenClaw remote access](https://docs.openclaw.ai/gateway/remote).
