@@ -1,11 +1,30 @@
 import { Type, type Static } from "typebox";
 
+/**
+ * A SecretRef as it sits in openclaw.json before resolution. The schema has to
+ * accept this shape as well as the resolved string: plugin config is validated
+ * when it is written, which is long before the runtime resolves anything, so a
+ * schema demanding a string rejects the very config we want to store. The imap
+ * plugin sidesteps this by declaring no config schema at all; keeping one and
+ * widening this single field is the better trade.
+ *
+ * `execute` still requires a string at call time, so an unresolved ref fails
+ * loudly there rather than being sent as an object.
+ */
+const SecretRefSchema = Type.Object({
+  source: Type.String(),
+  provider: Type.String(),
+  id: Type.String(),
+});
+
 export const ConfigSchema = Type.Object({
   host: Type.String({ description: "SMTP submission host." }),
   port: Type.Number({ description: "Submission port. 587 for STARTTLS." }),
   secure: Type.Boolean({ description: "True only for implicit TLS on 465." }),
   user: Type.String({ description: "SMTP username." }),
-  password: Type.String({ description: "SMTP password. Use a SecretRef." }),
+  password: Type.Union([Type.String(), SecretRefSchema], {
+    description: "SMTP password. Use a SecretRef; it resolves to a string before the tool runs.",
+  }),
   from: Type.String({ description: "Envelope sender and header From. Must match." }),
   allowedRecipients: Type.Array(Type.String(), {
     description: "Addresses this tool may send to. Empty means send to nobody.",

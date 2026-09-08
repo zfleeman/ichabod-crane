@@ -33,8 +33,31 @@
         "description": "SMTP username."
       },
       "password": {
-        "type": "string",
-        "description": "SMTP password. Use a SecretRef."
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "object",
+            "required": [
+              "source",
+              "provider",
+              "id"
+            ],
+            "properties": {
+              "source": {
+                "type": "string"
+              },
+              "provider": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "description": "SMTP password. Use a SecretRef; it resolves to a string before the tool runs."
       },
       "from": {
         "type": "string",
@@ -56,11 +79,6 @@
   "activation": {
     "onStartup": true
   },
-  "contracts": {
-    "tools": [
-      "smtp_send"
-    ]
-  },
   "configContracts": {
     "secretInputs": {
       "paths": [
@@ -70,5 +88,10 @@
         }
       ]
     }
+  },
+  "contracts": {
+    "tools": [
+      "smtp_send"
+    ]
   }
 }
