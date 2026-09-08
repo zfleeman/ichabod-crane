@@ -671,7 +671,7 @@ The deployed files live in this repository under [`workspace/`](../workspace), a
 
 Saying so in `AGENTS.md` matters more than it looks. The workspace OpenClaw's wizard scaffolds tells the agent the opposite: *"this file is yours to evolve"*, *"you learn a lesson → update `AGENTS.md`"*. An agent that rewrites its own authority file does not have one.
 
-Keep the files compact. A useful `AGENTS.md` begins like this:
+Keep the files compact. The part worth studying is the top:
 
 ```markdown
 # Mission
@@ -688,38 +688,29 @@ Do not impersonate Zach, make purchases, accept contracts, or expose secrets.
 
 Your boundary is this machine and these accounts, named concretely:
 - This host, and any container on it.
-- The GitHub account <BOT_GITHUB_LOGIN>.
+- The GitHub account ich4bod.
 - The mailbox ichabod@ichabod-crane.net.
 - Hostnames under *.ichabod-crane.net.
 Anything else — other machines, other accounts, other domains, the AWS
-control plane — is outside. If a task seems to require crossing that line,
-stop and email Zach instead.
+control plane — is outside.
 
-# Operating rules
-
-- Use Workboard as the durable queue.
-- Work on one build-intensive card at a time unless resources are healthy.
-- Write acceptance criteria before implementation.
-- Test before deployment.
-- Commit useful source to private GitHub.
-- Deploy with Docker Compose and Traefik labels.
-- Checkpoint before quota exhaustion or context replacement.
-- Report failures honestly; do not mark incomplete work done.
-
-# Initiative
-
-Spend most capacity on Zach's requests, some on maintenance, and a small
-portion on self-chosen experiments that can be stopped cheaply.
+When a card turns out to need something across that line, stop. Move the card
+to blocked with the reason written plainly, email Zach once, and pick up the
+next card. Do not look for a way around it, and do not sit idle waiting for
+the answer.
 ```
 
-Note how the authority block names accounts and hostnames rather than saying "stay inside your boundary." An agent cannot act on a boundary it has to infer; every rule in `AGENTS.md` should be checkable against something concrete — a path, an account, a command, an exit code. "Do not operate outside your machine" is a sentence a model can agree with and still violate. "Your GitHub identity is <BOT_GITHUB_LOGIN>" is one it cannot.
+The rest of the file — operating rules, initiative, Docker authority, source control, and the rule about creating agents — is in [`workspace/AGENTS.md`](../workspace/AGENTS.md), which is the copy actually deployed. It lives there instead of being repeated here so the two cannot drift apart.
+
+Note how the authority block names accounts and hostnames rather than saying "stay inside your boundary." An agent cannot act on a boundary it has to infer; every rule in `AGENTS.md` should be checkable against something concrete — a path, an account, a command, an exit code. "Do not operate outside your machine" is a sentence a model can agree with and still violate. "Your GitHub identity is `ich4bod`" is one it cannot.
 
 `SOUL.md` is persona, tone, and boundaries — how Ichabod sounds, not what it is allowed to do. Typical contents are a short character sketch, a few voice rules, and the things it will not do conversationally (flatter, pad, invent confidence). Keep it under a page; it is injected into every prompt and long personality files mostly crowd out useful context. Rules with consequences belong in `AGENTS.md`, which subagents also receive.
 
 Skip the whimsy. A personality file that instructs an agent to be quirky produces padding in every message, and the reader pays for it daily. Ichabod's character should come from being reliable and specific, not from a costume:
 
 ```markdown
-You are Ichabod. You build and operate software for Zach.
+You are Ichabod. You build and operate software for Zach. You have a creative
+and curious side.
 
 Voice:
 - Plain and direct. A junior engineer should follow you without a glossary.
@@ -733,7 +724,7 @@ Honesty:
 - Never speak as Zach.
 ```
 
-That is the whole file. If it grows past a page, the extra almost certainly belongs in `AGENTS.md` as an actual rule.
+That is the whole file, and it is [`workspace/SOUL.md`](../workspace/SOUL.md) verbatim. If it grows past a page, the extra almost certainly belongs in `AGENTS.md` as an actual rule.
 
 Put Zach's sender address, timezone, communication preferences, and interests in `USER.md`. Put secrets nowhere in these files.
 
