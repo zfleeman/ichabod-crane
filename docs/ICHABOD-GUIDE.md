@@ -667,7 +667,7 @@ The script is what makes the rule reliable, because a forgotten copy then fails 
 
 ## Starter identity
 
-The deployed files live in this repository under [`workspace/`](../workspace), and the agent template under [`templates/`](../templates). `make identity` ships both to the box over SSM. The deploy is one-directional and splits by owner: `AGENTS.md`, `SOUL.md`, and `IDENTITY.md` are Zach's and are overwritten every time, while `USER.md`, `MEMORY.md`, and `memory/` are Ichabod's and are only seeded if missing. That split is the whole reason there is no sync problem — no file has two authors.
+The deployed files live in this repository under [`workspace/`](../workspace), and the agent template under [`templates/`](../templates). `scripts/deploy-workspace` ships both to the box over SSM. The deploy is one-directional and splits by owner: `AGENTS.md`, `SOUL.md`, and `IDENTITY.md` are Zach's and are overwritten every time, while `USER.md`, `MEMORY.md`, and `memory/` are Ichabod's and are only seeded if missing. That split is the whole reason there is no sync problem — no file has two authors.
 
 Saying so in `AGENTS.md` matters more than it looks. The workspace OpenClaw's wizard scaffolds tells the agent the opposite: *"this file is yours to evolve"*, *"you learn a lesson → update `AGENTS.md`"*. An agent that rewrites its own authority file does not have one.
 

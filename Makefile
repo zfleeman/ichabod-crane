@@ -83,31 +83,6 @@ start: ## Start the instance and wait until SSM answers
 	  done; \
 	  echo "SSM never came online; check the console in the EC2 web UI." >&2; exit 1
 
-# SSM has no file copy, so the whole payload rides over as base64 inside a
-# run-command. It is a few KB of Markdown against a 100 KB parameter limit.
-# scripts/install-workspace decides what gets overwritten and what only gets
-# seeded; see the ownership table in the guide.
-identity: ## Deploy the workspace files and agent template to the box
-	@id=$(INSTANCE_ID); \
-	  tmp=$$(mktemp -d); \
-	  b64=$$(tar czf - workspace templates scripts | base64 | tr -d '\n'); \
-	  cmd="rm -rf /tmp/ichabod-deploy && mkdir -p /tmp/ichabod-deploy && echo $$b64 | base64 -d | tar xzf - -C /tmp/ichabod-deploy && bash /tmp/ichabod-deploy/scripts/install-workspace"; \
-	  printf '{"commands":["%s"]}' "$$cmd" > $$tmp/params.json; \
-	  cid=$$(aws ssm send-command --instance-ids $$id \
-	    --document-name AWS-RunShellScript \
-	    --parameters file://$$tmp/params.json \
-	    --query Command.CommandId --output text); \
-	  echo "sent $$cid, waiting..."; \
-	  for i in $$(seq 30); do \
-	    status=$$(aws ssm get-command-invocation --command-id $$cid --instance-id $$id \
-	      --query Status --output text 2>/dev/null || echo Pending); \
-	    case "$$status" in InProgress|Pending|Delayed) sleep 2 ;; *) break ;; esac; \
-	  done; \
-	  aws ssm get-command-invocation --command-id $$cid --instance-id $$id \
-	    --query '[StandardOutputContent,StandardErrorContent]' --output text; \
-	  rm -rf $$tmp; \
-	  [ "$$status" = "Success" ] || { echo "deploy failed: $$status" >&2; exit 1; }
-
 ip: ## Print the Elastic IP
 	@tofu -chdir=tofu output -raw public_ip; echo
 
@@ -115,4 +90,4 @@ alarms: ## Current state of every ichabod alarm
 	aws cloudwatch describe-alarms --alarm-name-prefix ichabod- \
 	  --query 'MetricAlarms[].[AlarmName,StateValue]' --output table
 
-.PHONY: help init check plan apply shell openclaw ui status stop start identity ip alarms
+.PHONY: help init check plan apply shell openclaw ui status stop start ip alarms

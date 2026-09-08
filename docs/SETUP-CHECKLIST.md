@@ -220,8 +220,8 @@ The wizard already scaffolded `AGENTS.md`, `SOUL.md`, `IDENTITY.md`, `USER.md`, 
 - [ ] Write `workspace/USER.md` — Zach's address, expertise, tooling, and working preferences, as dated directives in the format the runtime parses. No credentials.
 - [ ] Seed `workspace/MEMORY.md` and state the promotion rule in `AGENTS.md`: a daily-log lesson that still matters in a month becomes one line here.
 - [ ] Create `templates/agent-workspace` and the `new-agent` script that refuses to finish when the resulting `AGENTS.md` is missing the authority block. Keep both in Git.
-- [ ] `make identity` to deploy all of it. The policy files overwrite; `USER.md` and `MEMORY.md` seed only.
-- [ ] Delete `BOOTSTRAP.md` from the workspace — it tells the agent to pick its own name and vibe, and Ichabod's identity is already decided. `make identity` removes it.
+- [ ] `scripts/deploy-workspace` to deploy all of it. The policy files overwrite; `USER.md` and `MEMORY.md` seed only.
+- [ ] Delete `BOOTSTRAP.md` from the workspace — it tells the agent to pick its own name and vibe, and Ichabod's identity is already decided. `scripts/deploy-workspace` removes it.
 - [ ] `openclaw agents set-identity --workspace <path> --name Ichabod --theme <theme> --emoji 🎃` so the Control UI and channels show the same identity. Never hand-edit `openclaw.json`.
 - [ ] Set `agents.ownership` to `explicit` and define the `ichabod` entry — workspace path, sandbox off.
 - [ ] Define the `mail_reader` entry — its own workspace, sandbox `all` scoped to the session with `workspaceAccess: none`, minimal tool profile allowing only `session_status` and `workboard_create`, denying fs, runtime, web, browser, cron, gateway, and nodes.
