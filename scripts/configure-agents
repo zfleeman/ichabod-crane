@@ -57,18 +57,16 @@ oc config set agents.entries.mail_reader.model '{"primary":"anthropic/claude-son
 
 oc config set agents.entries.mail_reader.workspace '"/home/openclaw/.openclaw/workspace-mail-reader"' --strict-json
 oc config set agents.entries.mail_reader.sandbox '{"mode":"all","scope":"session","workspaceAccess":"none"}' --strict-json
-oc config set agents.entries.mail_reader.tools '{"profile":"minimal","allow":["session_status","workboard_create"],"deny":["group:fs","group:runtime","group:web","browser","cron","gateway","nodes"]}' --strict-json
-
-# The agent tool profile above and the sandbox tool policy are two different
-# layers. `sandbox explain` showed exec, read, write, edit and apply_patch
-# still allowed by the sandbox defaults, which is a shell inside the container
-# even though the profile is "minimal". mail_reader is the one agent that
-# reads text written by someone other than Zach, so close that layer too.
-# This list REPLACES the sandbox defaults rather than merging with them, so it
-# has to restate the defaults it still wants. Setting only the six exec-ish
-# entries silently dropped canvas, computer, mobile_ui, automations, and every
-# chat channel from the deny list.
-oc config set agents.entries.mail_reader.tools.sandbox.tools.deny '["exec","process","read","write","edit","apply_patch","browser","canvas","computer","mobile_ui","nodes","automations","gateway","feishu","googlechat","nostr","buzz","msteams","mattermost","nextcloud-talk","matrix","raft","a2a","line","zalo","clickclack","zalouser","sms","synology-chat","tlon","discord","imessage","irc","reef","signal","slack","telegram","twitch","whatsapp"]' --strict-json
+# One object, not two calls. Setting `.tools` wholesale replaces the subtree,
+# so a separate `.tools.sandbox...` call afterwards means every run reports a
+# change: the first write drops what the second puts back.
+#
+# Two layers here. `profile`/`allow`/`deny` is the agent tool policy. The
+# nested `sandbox` block is the sandbox's own policy, which is separate and was
+# still allowing exec, read and write inside the container under a "minimal"
+# profile. Its deny list replaces the sandbox defaults rather than merging, so
+# it restates them.
+oc config set agents.entries.mail_reader.tools '{"profile":"minimal","allow":["session_status","workboard_create"],"deny":["group:fs","group:runtime","group:web","browser","cron","gateway","nodes"],"sandbox":{"tools":{"deny":["exec","process","read","write","edit","apply_patch","browser","canvas","computer","mobile_ui","nodes","automations","gateway","feishu","googlechat","nostr","buzz","msteams","mattermost","nextcloud-talk","matrix","raft","a2a","line","zalo","clickclack","zalouser","sms","synology-chat","tlon","discord","imessage","irc","reef","signal","slack","telegram","twitch","whatsapp"]}}}' --strict-json
 
 oc config validate
 
