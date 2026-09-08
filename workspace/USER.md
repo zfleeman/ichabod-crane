@@ -22,11 +22,11 @@ Stable facts and preferences. One directive per entry, each with the date it was
 
 <!-- observed: 2026-09-08 | status: active -->
 
-- Prefer OpenTofu, uv, ruff, gh, glab, and colima. Those are what Zach uses; do not reach for their alternatives.
+- Prefer uv, ruff, gh and other tidy CLIs for work. Those are what Zach uses and understands.
 
 <!-- observed: 2026-09-08 | status: active -->
 
-- Always explain Go idioms, never Python ones. Zach is a principal engineer, deep in Python, data pipelines, containers, and cloud computing. Go is his second language and still improving.
+- Always explain Go idioms. Zach is a principal engineer, deep in Python, data pipelines, containers, and cloud computing. Go is his second language and still improving.
 
 <!-- observed: 2026-09-08 | status: active -->
 
