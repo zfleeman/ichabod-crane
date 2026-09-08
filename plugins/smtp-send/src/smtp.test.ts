@@ -47,6 +47,18 @@ describe("message construction", () => {
     expect(mail.envelope.from).toBe(config.from);
   });
 
+  it("puts the display name on the header From and keeps the envelope bare", () => {
+    const named = { ...config, fromName: "Ichabod Crane" };
+    const mail = buildMessage({ to: "zach@example.com", subject: "s", body: "b" }, named);
+    expect(mail.from).toEqual({ name: "Ichabod Crane", address: config.from });
+    expect(mail.envelope.from).toBe(config.from);
+  });
+
+  it("falls back to the bare address when no display name is configured", () => {
+    const mail = buildMessage({ to: "zach@example.com", subject: "s", body: "b" }, config);
+    expect(mail.from).toBe(config.from);
+  });
+
   it("omits threading headers when no reference is given", () => {
     const mail = buildMessage({ to: "zach@example.com", subject: "s", body: "b" }, config);
     expect(mail).not.toHaveProperty("inReplyTo");

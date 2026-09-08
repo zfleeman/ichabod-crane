@@ -86,8 +86,9 @@ sleep 8
 # without that the runtime type-checks the unresolved ref object against
 # "password": string and rejects the whole config.
 #
-# from is both the envelope sender and the header From; a mismatch is what
-# breaks DMARC alignment. allowedRecipients is enforced inside the tool rather
+# from is both the envelope sender and the header From address; a mismatch is
+# what breaks DMARC alignment. fromName decorates the header only — the
+# envelope stays a bare address. allowedRecipients is enforced inside the tool rather
 # than by instruction, because the card that triggers a send may have been
 # written from an injected email.
 oc config set plugins.entries.smtp-send.config '{
@@ -97,6 +98,7 @@ oc config set plugins.entries.smtp-send.config '{
   "user": "ichabod@ichabod-crane.net",
   "password": {"source":"store","provider":"default","id":"EMAIL_PASSWORD"},
   "from": "ichabod@ichabod-crane.net",
+  "fromName": "Ichabod Crane",
   "allowedRecipients": ["zfleeman@gmail.com"],
   "maxPerHour": 12
 }' --strict-json

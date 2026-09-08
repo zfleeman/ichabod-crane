@@ -25,7 +25,10 @@ export const ConfigSchema = Type.Object({
   password: Type.Union([Type.String(), SecretRefSchema], {
     description: "SMTP password. Use a SecretRef; it resolves to a string before the tool runs.",
   }),
-  from: Type.String({ description: "Envelope sender and header From. Must match." }),
+  from: Type.String({ description: "Bare address used as envelope sender and header From." }),
+  fromName: Type.Optional(
+    Type.String({ description: "Display name on the header From. Never on the envelope." }),
+  ),
   allowedRecipients: Type.Array(Type.String(), {
     description: "Addresses this tool may send to. Empty means send to nobody.",
   }),
@@ -70,13 +73,17 @@ export function assertAllowedRecipient(to: string, allowed: readonly string[]): 
 }
 
 /**
- * Envelope sender and header From are both config.from. A mismatch between them
- * is what breaks DMARC alignment, so neither is caller-supplied.
+ * The envelope sender and the header From address are both config.from. A
+ * mismatch between them is what breaks DMARC alignment, so neither is
+ * caller-supplied. fromName only ever decorates the header.
  */
 export function buildMessage(params: Params, config: Config) {
   return {
+    // The envelope sender stays a bare address. DMARC aligns against the
+    // envelope and the header address, and a display name belongs to neither —
+    // putting one here would be a malformed envelope, not a friendlier one.
     envelope: { from: config.from, to: normalizeAddress(params.to) },
-    from: config.from,
+    from: config.fromName ? { name: config.fromName, address: config.from } : config.from,
     to: normalizeAddress(params.to),
     subject: params.subject,
     text: params.body,

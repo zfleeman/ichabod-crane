@@ -61,7 +61,11 @@
       },
       "from": {
         "type": "string",
-        "description": "Envelope sender and header From. Must match."
+        "description": "Bare address used as envelope sender and header From."
+      },
+      "fromName": {
+        "type": "string",
+        "description": "Display name on the header From. Never on the envelope."
       },
       "allowedRecipients": {
         "type": "array",
