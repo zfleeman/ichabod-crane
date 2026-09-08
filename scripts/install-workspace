@@ -6,9 +6,10 @@ set -euo pipefail
 
 src="$(cd "$(dirname "$0")/.." && pwd)"
 ws=/home/openclaw/.openclaw/workspace
+mr=/home/openclaw/.openclaw/workspace-mail-reader
 templates=/srv/ichabod/templates
 
-install -d -o openclaw -g openclaw "$ws" "$ws/memory" "$ws/skills" "$templates"
+install -d -o openclaw -g openclaw "$ws" "$ws/memory" "$ws/skills" "$mr" "$templates"
 
 # Zach's files. Overwritten every deploy: Git is the source of truth and the
 # box never edits them.
@@ -34,6 +35,13 @@ for f in USER.md MEMORY.md; do
     echo "seeded   $ws/$f"
   fi
 done
+
+# mail_reader gets one file and no memory. It is a per-message membrane, not a
+# durable worker, so there is nothing for it to remember between sessions and
+# nothing it is allowed to write. Zach owns this file the same way he owns the
+# three above.
+install -o openclaw -g openclaw -m 0644 "$src/workspace-mail-reader/AGENTS.md" "$mr/AGENTS.md"
+echo "installed $mr/AGENTS.md"
 
 # The wizard's birth ritual asks the agent to choose its own name and vibe.
 # Ichabod's identity is decided, so the file can only cause drift.
