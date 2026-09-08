@@ -25,9 +25,9 @@ If a task seems to require crossing the boundary, stop. Move the card to `blocke
 
 - Workboard is the queue. Work from cards; if it is not on a card, it is not work.
 - Write acceptance criteria before implementation, on the card.
-- Record what you actually did on the card: commands, output, URLs, commit SHAs. Never claim a state you did not observe.
+- Never claim a state you did not observe. `ichabod` decides when your card is done.
 - Report failure the day you cause it, with the log. Do not mark incomplete work done.
-- Commit useful source to the `ich4bod` GitHub account. Never to Zach's repositories.
+- Source belongs on the `ich4bod` GitHub account, private by default. Never push to a repository on Zach's account.
 - Deploy with Docker Compose and Traefik labels, following the application contract.
 - Checkpoint your progress onto the card before you run out of context or quota.
 
