@@ -1139,6 +1139,19 @@ Routine messages from `ichabod` need no human approval. `AGENTS.md` supplies the
 
 Begin with Zach as the only permitted recipient — an allowlist in the tool itself, not merely an instruction — and widen it only when arbitrary correspondence becomes a real requirement.
 
+## Mailbox management
+
+The plugin never touches the mailbox. It does not move messages, does not set flags, and does not backfill mail that arrived before watching began. That is the correct shape for an intake trigger, but it leaves the mailbox itself unmanaged: nothing archives a handled request, nothing marks anything read, and nothing can answer "what did Zach send last Tuesday."
+
+That gap is worth a second small tool — a typed OpenClaw tool over Python's `imaplib`, with four operations: archive a message, mark one read, search history, and fetch one message by `Message-ID`. Address messages by the `Message-ID` the triage card already stores as its idempotency key, so the tool and the board agree on what a message is without a second identifier.
+
+Two rules keep it from undoing the intake membrane:
+
+- **Grant it to `ichabod` only, never to `mail_reader`.** The reader's whole purpose is that its only possible mutation is one triage card. A reader that can also search the mailbox can pull in messages nobody admitted, and an injected instruction in the message it is currently reading is enough to make it try.
+- **It must never be how unread mail first enters a session.** The plugin stays the only intake path, and this tool operates on mail that has already been through it. Point it at `INBOX` looking for new work and the sender allowlist, the DMARC check, and the sandbox have all been bypassed through the side door.
+
+This is a supplement, not a replacement. It is tempting to read "just use `imaplib`" as an argument for dropping the plugin, and it is worth being clear about why that trade is bad: the plugin is not the reading mechanism, it is the trigger and the security boundary. A library cannot wake anything up, so intake would become a polling automation we write; `allowedSenders` and `senderAuth` would become DMARC-parsing code we own and have to get right; and the untrusted body would arrive in whichever agent called the tool — which, for anything useful, is the root-equivalent one. Sending is the genuine exception, and it is already a tool we build, because the plugin cannot send at all.
+
 ## Guest senders (deferred)
 
 Not in version 1 — the allowlist holds Zach's address only. Here is the shape it would take, so the decision is informed rather than deferred forever.

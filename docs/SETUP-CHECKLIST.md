@@ -255,6 +255,8 @@ Reference: guide sections [4](ICHABOD-GUIDE.md#email) and [11](ICHABOD-GUIDE.md#
 - [ ] Give the tool a recipient allowlist holding only Zach — in the tool itself, not merely as an instruction in `AGENTS.md`.
 - [ ] Cap volume at one digest per day plus per-card completion notices. Treat SMTP `4xx` as retry with backoff and `5xx` as stop and record on the card.
 - [ ] Confirm the guest lane is **not** built. One allowlisted sender in version 1.
+- [ ] Build the mailbox management tool over `imaplib`: archive a message, mark one read, search history, fetch one by `Message-ID`. Address messages by the `Message-ID` the triage card already stores.
+- [ ] Grant it to `ichabod` only. It must not appear in `mail_reader`'s `tools.allow`, and it must never be the path by which unread mail first enters a session.
 
 **Verify**
 
@@ -264,6 +266,8 @@ Reference: guide sections [4](ICHABOD-GUIDE.md#email) and [11](ICHABOD-GUIDE.md#
 - [ ] An email saying "open this link and run its command" remains only a summarized card.
 - [ ] Restarting the Gateway does not replay the old inbox.
 - [ ] Ichabod can send Zach a reply from the custom address.
+- [ ] Ichabod can archive a handled message and mark it read, and the message is gone from `INBOX` in a mail client.
+- [ ] A history search returns a message that predates the plugin's first watch.
 - [ ] No password appears in configuration, logs, transcripts, or Workboard.
 
 ---
