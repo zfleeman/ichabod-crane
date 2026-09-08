@@ -41,13 +41,19 @@ ui: ## Forward the Gateway to http://127.0.0.1:18789
 	  --document-name AWS-StartPortForwardingSession \
 	  --parameters '{"portNumber":["$(GATEWAY_PORT)"],"localPortNumber":["$(GATEWAY_PORT)"]}'
 
-status: ## Ask SSM whether the instance is online
-	aws ssm describe-instance-information \
-	  --filters Key=InstanceIds,Values=$(INSTANCE_ID) --output table
-
-state: ## Is the instance running or stopped?
-	aws ec2 describe-instances --instance-ids $(INSTANCE_ID) \
-	  --query 'Reservations[0].Instances[0].State.Name' --output text
+# Two separate questions with one answer: EC2 knows whether the machine is on,
+# SSM knows whether it is reachable. A running box whose agent is dead shows as
+# "running / not answering", which is the case worth spotting.
+status: ## Power state, and whether SSM is answering
+	@id=$(INSTANCE_ID); \
+	  power=$$(aws ec2 describe-instances --instance-ids $$id \
+	    --query 'Reservations[0].Instances[0].State.Name' --output text); \
+	  ping=$$(aws ssm describe-instance-information \
+	    --filters Key=InstanceIds,Values=$$id \
+	    --query 'InstanceInformationList[0].PingStatus' --output text); \
+	  [ "$$ping" = "Online" ] || ping="not answering"; \
+	  echo "instance: $$power"; \
+	  echo "ssm:      $$ping"
 
 stop: ## Stop the instance and wait until it is really stopped
 	@id=$(INSTANCE_ID); \
@@ -71,24 +77,13 @@ start: ## Start the instance and wait until SSM answers
 	    [ "$$ping" = "Online" ] && echo "online." && exit 0; \
 	    sleep 5; \
 	  done; \
-	  echo "SSM never came online; try 'make console'." >&2; exit 1
+	  echo "SSM never came online; check the console in the EC2 web UI." >&2; exit 1
 
 ip: ## Print the Elastic IP
 	@tofu -chdir=tofu output -raw public_ip; echo
-
-# Boot output from the hypervisor. The one thing still readable when SSM is not.
-console: ## Dump the serial console
-	aws ec2 get-console-output --instance-id $(INSTANCE_ID) --output text
 
 alarms: ## Current state of every ichabod alarm
 	aws cloudwatch describe-alarms --alarm-name-prefix ichabod- \
 	  --query 'MetricAlarms[].[AlarmName,StateValue]' --output table
 
-# Same query as the comment in variables.tf. Paste the ID into terraform.tfvars.
-ami: ## Latest Canonical Ubuntu 24.04 AMI for us-east-2
-	aws ec2 describe-images --region us-east-2 --owners 099720109477 \
-	  --filters "Name=name,Values=ubuntu/images/hvm-ssd*/ubuntu-noble-24.04-amd64-server-*" \
-	            "Name=state,Values=available" \
-	  --query 'sort_by(Images,&CreationDate)[-1].[ImageId,Name]' --output text
-
-.PHONY: help init check plan apply shell openclaw ui status state stop start ip console alarms ami
+.PHONY: help init check plan apply shell openclaw ui status stop start ip alarms
