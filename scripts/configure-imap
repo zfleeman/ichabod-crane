@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+# Write the IMAP account into openclaw.json and enable the trigger.
+#
+# Run from a checkout, on Zach's laptop, after the mailbox exists and
+# IMAP_PASSWORD is in the secret store. Idempotent, like configure-agents:
+# rerunning it is the way back to a known intake config.
+#
+# Usage: scripts/configure-imap
+
+set -euo pipefail
+
+export AWS_PROFILE="${AWS_PROFILE:-ZACH-ROOT}"
+export AWS_PAGER=""
+
+cd "$(dirname "$0")/.."
+instance="$(tofu -chdir=tofu output -raw instance_id)"
+
+read -r -d '' remote_script <<'REMOTE' || true
+set -euo pipefail
+oc() { sudo -iu openclaw openclaw "$@"; }
+
+sudo -iu openclaw cp /home/openclaw/.openclaw/openclaw.json \
+  "/home/openclaw/.openclaw/openclaw.json.pre-imap-$(date +%Y%m%d-%H%M%S)"
+
+# The account map is keyed by an id, not an array. The id has to be
+# session-safe: ^[A-Za-z0-9][A-Za-z0-9_-]*$, or the plugin throws on load.
+#
+# Only host, user, password and agentId are required. Everything else below is
+# written explicitly even where it matches the plugin default, because the
+# defaults are invisible in the config file and this is the security boundary.
+#
+# password is a SecretRef rather than a literal. Note the failure mode: if the
+# ref does not resolve, the plugin skips the account instead of erroring, so a
+# broken secret looks exactly like a quiet mailbox. `secrets audit --check` is
+# what catches that, not the Gateway log.
+#
+# provider is "default" because `secrets` is unset in openclaw.json, so no
+# provider aliases are authored and the built-in default applies. If a provider
+# is ever added under secrets.providers, this name has to follow it.
+#
+# allowedSenders entries are either "user@domain" (exact; the local part is
+# case-sensitive) or "@domain" (the whole domain). An empty list disables the
+# account outright — a fail-safe, but a silent one.
+#
+# addressTokens is deliberately absent. A token there accepts a sender without
+# any DMARC check at all, which is a hole straight through senderAuth.
+oc config set plugins.entries.imap.config '{
+  "accounts": {
+    "ichabod": {
+      "host": "imap.fastmail.com",
+      "port": 993,
+      "secure": true,
+      "user": "ichabod@ichabod-crane.net",
+      "password": {"source":"store","provider":"default","id":"EMAIL_PASSWORD"},
+      "mailbox": "INBOX",
+      "agentId": "mail_reader",
+      "allowedSenders": ["zfleeman@gmail.com"],
+      "senderAuth": {"min":"verified"},
+      "watch": {"mode":"auto","pollSeconds":60},
+      "deliver": false,
+      "includeBody": true,
+      "maxBytes": 20000
+    }
+  }
+}' --strict-json
+
+oc plugins enable imap
+
+sudo systemctl restart openclaw-gateway
+oc config validate
+oc secrets audit --check
+REMOTE
+
+payload="$(printf '%s' "$remote_script" | base64 | tr -d '\n')"
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+
+remote="echo $payload | base64 -d > /tmp/configure-imap.sh && bash /tmp/configure-imap.sh"
+printf '{"commands":["%s"]}' "$remote" > "$tmp/params.json"
+
+command_id="$(aws ssm send-command --instance-ids "$instance" \
+  --document-name AWS-RunShellScript \
+  --parameters "file://$tmp/params.json" \
+  --query Command.CommandId --output text)"
+echo "sent $command_id, waiting..."
+
+aws ssm wait command-executed --command-id "$command_id" --instance-id "$instance" 2>/dev/null || true
+
+aws ssm get-command-invocation --command-id "$command_id" --instance-id "$instance" \
+  --query '[StandardOutputContent,StandardErrorContent]' --output text
+
+status="$(aws ssm get-command-invocation --command-id "$command_id" --instance-id "$instance" \
+  --query Status --output text)"
+[ "$status" = "Success" ] || { echo "configure-imap failed: $status" >&2; exit 1; }
