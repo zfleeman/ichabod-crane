@@ -64,7 +64,11 @@ oc config set agents.entries.mail_reader.tools '{"profile":"minimal","allow":["s
 # still allowed by the sandbox defaults, which is a shell inside the container
 # even though the profile is "minimal". mail_reader is the one agent that
 # reads text written by someone other than Zach, so close that layer too.
-oc config set agents.entries.mail_reader.tools.sandbox.tools.deny '["exec","process","write","edit","apply_patch","read"]' --strict-json
+# This list REPLACES the sandbox defaults rather than merging with them, so it
+# has to restate the defaults it still wants. Setting only the six exec-ish
+# entries silently dropped canvas, computer, mobile_ui, automations, and every
+# chat channel from the deny list.
+oc config set agents.entries.mail_reader.tools.sandbox.tools.deny '["exec","process","read","write","edit","apply_patch","browser","canvas","computer","mobile_ui","nodes","automations","gateway","feishu","googlechat","nostr","buzz","msteams","mattermost","nextcloud-talk","matrix","raft","a2a","line","zalo","clickclack","zalouser","sms","synology-chat","tlon","discord","imessage","irc","reef","signal","slack","telegram","twitch","whatsapp"]' --strict-json
 
 oc config validate
 
