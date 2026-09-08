@@ -1,2 +1,6 @@
 # Claude Code local settings and permission rules, not shared machinery.
 .claude/
+
+# Plugin build output and dependencies.
+node_modules/
+plugins/*/dist/

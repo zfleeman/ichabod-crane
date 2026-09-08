@@ -1,0 +1,74 @@
+{
+  "id": "smtp-send",
+  "name": "SMTP Send",
+  "description": "Send outbound email through the mailbox provider's submission service.",
+  "version": "0.1.0",
+  "configSchema": {
+    "type": "object",
+    "required": [
+      "host",
+      "port",
+      "secure",
+      "user",
+      "password",
+      "from",
+      "allowedRecipients",
+      "maxPerHour"
+    ],
+    "properties": {
+      "host": {
+        "type": "string",
+        "description": "SMTP submission host."
+      },
+      "port": {
+        "type": "number",
+        "description": "Submission port. 587 for STARTTLS."
+      },
+      "secure": {
+        "type": "boolean",
+        "description": "True only for implicit TLS on 465."
+      },
+      "user": {
+        "type": "string",
+        "description": "SMTP username."
+      },
+      "password": {
+        "type": "string",
+        "description": "SMTP password. Use a SecretRef."
+      },
+      "from": {
+        "type": "string",
+        "description": "Envelope sender and header From. Must match."
+      },
+      "allowedRecipients": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Addresses this tool may send to. Empty means send to nobody."
+      },
+      "maxPerHour": {
+        "type": "number",
+        "description": "Sends allowed per rolling hour."
+      }
+    }
+  },
+  "activation": {
+    "onStartup": true
+  },
+  "contracts": {
+    "tools": [
+      "smtp_send"
+    ]
+  },
+  "configContracts": {
+    "secretInputs": {
+      "paths": [
+        {
+          "path": "password",
+          "expected": "string"
+        }
+      ]
+    }
+  }
+}
