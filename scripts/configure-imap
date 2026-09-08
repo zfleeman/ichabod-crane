@@ -66,9 +66,21 @@ oc config set plugins.entries.imap.config '{
 
 oc plugins enable imap
 
-sudo systemctl restart openclaw-gateway
 oc config validate
+
+# The Gateway is a user-scope unit owned by the openclaw account, not a system
+# one. `sudo systemctl restart openclaw-gateway` as root finds no such unit and
+# reports "inactive" for a Gateway that is running perfectly well.
+sudo -iu openclaw systemctl --user restart openclaw-gateway
+sleep 5
+sudo -iu openclaw systemctl --user is-active openclaw-gateway
+
+# The account is skipped in silence if this ref does not resolve, so this check
+# is the difference between a working intake and a mailbox that looks quiet.
 oc secrets audit --check
+
+echo "=== imap ==="
+oc plugins list | grep -i imap
 REMOTE
 
 payload="$(printf '%s' "$remote_script" | base64 | tr -d '\n')"
