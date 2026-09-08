@@ -491,7 +491,14 @@ Every command Zach runs by hand lives in the `Makefile` at the repository root, 
 - `make shell` — an interactive shell on the box, landing as `ssm-user`.
 - `make openclaw` — a shell as Ichabod's service account.
 - `make ui` — forwards the loopback Gateway to `http://127.0.0.1:18789` on the laptop.
-- `make status` — asks SSM whether the instance is `Online`.
+- `make status` — whether the machine is on, and whether SSM is answering.
+- `make start` / `make stop` — power the instance on or off. Both wait for the change to finish; `start` waits for SSM to answer, not just for EC2 to report `running`, because everything else here needs SSM. Stopping keeps the root volume and the Elastic IP, so the box comes back as it was and only the EBS and address charges continue.
+- `make ip` — the Elastic IP.
+- `make alarms` — the current state of every `ichabod-` CloudWatch alarm.
+
+`make status` asks two services one question, because either can be the problem. EC2 knows whether the machine is powered on; SSM knows whether the agent on it is reachable. `running / not answering` is the interesting case — the machine is up and paid for, but the only way in is broken.
+
+Every target runs against the `ZACH-ROOT` AWS profile. The Makefile exports `AWS_PROFILE` rather than passing `--profile`, so `tofu` reads it too; override it for a single run with `make status AWS_PROFILE=SHPO`.
 
 ## Open the Control UI
 
