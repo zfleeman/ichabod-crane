@@ -72,7 +72,7 @@ https://app-name.ichabod-crane.net
 Workboard proof + email to Zach
 ```
 
-**What is actually named Ichabod?** The OpenClaw agent whose id is `main`. Everything else — the EC2 instance, the domain, `/srv/ichabod` — just borrows the name. The personality lives in `main`'s workspace files: `IDENTITY.md` sets the name and presentation, `SOUL.md` sets voice and temperament, and `agents.entries.main.identity` in `openclaw.json` sets the display name and emoji. See [section 9](#9-identity-agents-and-workboard).
+**What is actually named Ichabod?** The OpenClaw agent whose id is `ichabod`. Everything else — the EC2 instance, the domain, `/srv/ichabod` — just borrows the name. The personality lives in `ichabod`'s workspace files: `IDENTITY.md` sets the name and presentation, `SOUL.md` sets voice and temperament, and `agents.entries.ichabod.identity` in `openclaw.json` sets the display name and emoji. See [section 9](#9-identity-agents-and-workboard).
 
 There is no deployment broker. There is no Coolify, Kubernetes, GitHub Actions, or image registry, and none is planned. This box stays an experiment; needing another platform layer is a signal to shrink the experiment, not to grow the platform.
 
@@ -131,7 +131,7 @@ Ichabod may do the following without asking:
 - Choose and finish self-directed work within its resource budget.
 - Repair its own projects and improve its templates, tools, and instructions.
 
-The main agent — agent id `main`, the one named Ichabod — runs with host execution and no routine command reviewer. `full` is a real OpenClaw permission mode, the most permissive of `read-only`, `guarded`, `workspace`, and `full`. It is chosen per session from the Permissions menu (or inherited from the configured `tools.exec.mode` default) and requires `operator.admin`. A `full` session can apply supported durable-agent operations without an operator prompt. This is broad authority, not a narrow “agent creation only” exception. See [OpenClaw permission modes](https://docs.openclaw.ai/gateway/permission-modes).
+The main agent — agent id `ichabod` — runs with host execution and no routine command reviewer. `full` is a real OpenClaw permission mode, the most permissive of `read-only`, `guarded`, `workspace`, and `full`. It is chosen per session from the Permissions menu (or inherited from the configured `tools.exec.security` default) and requires `operator.admin`. A `full` session can apply supported durable-agent operations without an operator prompt. This is broad authority, not a narrow “agent creation only” exception. See [OpenClaw permission modes](https://docs.openclaw.ai/gateway/permission-modes).
 
 ## Kept outside the box
 
@@ -552,19 +552,27 @@ If systemd cannot find Claude, a user-service drop-in on `openclaw-gateway.servi
 
 ## Deliberately enable full host execution
 
-The main agent is intentionally unsandboxed. All of this lives in `/home/openclaw/.openclaw/openclaw.json` — `agents.entries.main.sandbox`, `agents.entries.main.tools`, and the global `tools.exec.*` block — plus a per-session permission mode chosen in the Control UI's Permissions menu. The `openclaw config set` commands below are just a typed way to write that file; you can edit it directly, but restart the Gateway either way. Configure the effective policy to:
+The main agent is intentionally unsandboxed. All of this lives in `/home/openclaw/.openclaw/openclaw.json` — `agents.entries.ichabod.sandbox`, `agents.entries.ichabod.tools`, and the global `tools.exec.*` block — plus a per-session permission mode chosen in the Control UI's Permissions menu. The `openclaw config set` commands below are just a typed way to write that file; you can edit it directly, but restart the Gateway either way. Configure the effective policy to:
 
-- Sandbox mode: off.
-- Exec host: Gateway.
-- Exec security/mode: full.
-- Ask/reviewer behavior: off.
-- Session permission mode: `full`.
+| Setting | Key | Value |
+|---|---|---|
+| Sandbox mode | `agents.entries.ichabod.sandbox.mode` | `"off"` |
+| Exec host | `tools.exec.host` | `"gateway"` |
+| Exec security | `tools.exec.security` | `"full"` |
+| Ask/reviewer behavior | `tools.exec.ask` | `"off"` |
+| Session permission mode | Control UI Permissions menu, per session | `full` |
 
-Configuration names can evolve, so inspect the effective result — `sandbox explain --agent main`, `exec-policy show`, `security audit --deep` — rather than trusting any one command sequence blindly.
+Two naming traps. `tools.exec.mode` also validates and appears in the security audit's own advice, but `tools.exec.security` is the field `exec-policy show` reads back — set that one and leave `mode` alone rather than keeping two sources of truth. And `agents.entries.<id>.sandbox` must be an object, so the sandbox setting is `sandbox.mode`; a bare `sandbox: "off"` is rejected with `expected object, received string`.
 
-The intended result is that `main` executes as the `openclaw` host user and can use Docker without prompting Zach. The `mail_reader` configured later must remain separately sandboxed and restricted.
+Validate before writing. `openclaw config set <key> <value> --dry-run` on its own reports success without checking anything — it prints "value mode does not run schema/resolvability checks". Add `--strict-json` and pass the value as JSON to get real validation.
 
-The complete authority path is tested from a main-agent session: a temporary directory under `/srv/ichabod/apps`, a harmless host command, a tiny Docker image built, its container started and removed, and no approval prompt anywhere in it.
+Names can still evolve, so inspect the effective result — `sandbox explain --agent ichabod`, `exec-policy show`, `security audit --deep` — rather than trusting any one command sequence blindly. In `exec-policy show`, the Requested column names its source: `security=full (OpenClaw default (full))` means you are inheriting the default, while `security=full (tools.exec.security)` means you have actually written it down. The end state is the same either way; writing it down is what stops a future default change from silently re-sandboxing the agent.
+
+Expect `security audit --deep` to report `tools.exec.security_full_configured` forever after. That warning is this section working, not a defect.
+
+The intended result is that `ichabod` executes as the `openclaw` host user and can use Docker without prompting Zach. The `mail_reader` configured later must remain separately sandboxed and restricted.
+
+The complete authority path is tested from an `ichabod` session: a temporary directory under `/srv/ichabod/apps`, a harmless host command, a tiny Docker image built, its container started and removed, and no approval prompt anywhere in it.
 
 If an approval appears, diagnose session permission, tool policy, and exec policy. Do not compensate by exposing the Gateway.
 
@@ -583,7 +591,7 @@ OpenClaw's built-in system prompt is generated by the runtime. User-authored ide
 ```text
 /home/openclaw/.openclaw/
 ├── openclaw.json
-└── workspace-main/
+└── workspace/
     ├── AGENTS.md
     ├── SOUL.md
     ├── IDENTITY.md
@@ -658,7 +666,7 @@ There is no single natural-language global file automatically inherited by every
 
 **Can Ichabod do that copying itself, every time?** Yes, but nothing in OpenClaw enforces it — there is no inheritance hook, so it is a convention that has to be written down and made mechanical. Two things make it stick:
 
-1. A rule in `main`'s `AGENTS.md`: *creating a durable agent means running `new-agent <name>`; never hand-write a workspace.*
+1. A rule in `ichabod`'s `AGENTS.md`: *creating a durable agent means running `new-agent <name>`; never hand-write a workspace.*
 2. A small script at `/srv/ichabod/templates/new-agent` that copies the template, substitutes the name, and refuses to finish if the resulting `AGENTS.md` is missing the authority block.
 
 The script is what makes the rule reliable, because a forgotten copy then fails loudly instead of silently producing an agent with no boundaries. Keep the template in Git so a change to the shared rules is reviewable.
@@ -736,7 +744,7 @@ Put Zach's sender address, timezone, communication preferences, and interests in
 
 Begin with two agents:
 
-### `main` — Ichabod
+### `ichabod` — the main agent
 
 - Permission mode `full`.
 - Sandbox off.
@@ -750,7 +758,7 @@ Host shell and Docker are not one switch — they are granted in two different p
 | Layer | Where | What it does |
 |---|---|---|
 | Operating system | `sudo usermod -aG docker openclaw` ([section 6](#install-docker)) | Lets the `openclaw` Unix user talk to the Docker socket at all |
-| OpenClaw | `tools.exec.host=gateway`, `tools.exec.mode=full`, sandbox off ([section 8](#deliberately-enable-full-host-execution)) | Lets the agent run host commands as that user, without a reviewer |
+| OpenClaw | `tools.exec.host=gateway`, `tools.exec.security=full`, sandbox off ([section 8](#deliberately-enable-full-host-execution)) | Lets the agent run host commands as that user, without a reviewer |
 
 Grant the OS half and skip the OpenClaw half and every `docker` call is refused by policy; do the reverse and the commands run but Docker denies the socket. Verify with the five-step authority test in section 8 rather than assuming.
 
@@ -761,7 +769,7 @@ Grant the OS half and skip the OpenClaw half and every `docker` call is refused 
 - No shell, filesystem, web, browser, Docker, cron, Gateway, GitHub, or messaging tools.
 - May create one idempotent Workboard triage card and report session status.
 
-Add `scout` later if a distinct idea-generating persona proves useful. Most persistent projects do not require a new durable OpenClaw identity; they can be a repository plus automation owned by `main`. When separation is useful, `full` mode allows `main` to create the durable agent without Zach's approval.
+Add `scout` later if a distinct idea-generating persona proves useful. Most persistent projects do not require a new durable OpenClaw identity; they can be a repository plus automation owned by `ichabod`. When separation is useful, `full` mode allows `ichabod` to create the durable agent without Zach's approval.
 
 **Can `scout` talk to Workboard?** Yes — Workboard access is a tool grant like any other, so `scout` gets it by listing the workboard tools in its `tools.allow`. Give it card *creation* and reading, not dispatch:
 
@@ -771,7 +779,7 @@ scout: {
 }
 ```
 
-That shape is deliberate. `scout` proposes; `main` decides and executes. An idea-generating agent that can also dispatch its own ideas will happily fill the board and the CPU with its own suggestions, which is the failure mode the capacity policy in [section 12](#capacity-policy) exists to prevent.
+That shape is deliberate. `scout` proposes; `ichabod` decides and executes. An idea-generating agent that can also dispatch its own ideas will happily fill the board and the CPU with its own suggestions, which is the failure mode the capacity policy in [section 12](#capacity-policy) exists to prevent.
 
 ## Workboard
 
@@ -796,7 +804,7 @@ So: one recurring automation runs the export, renders static HTML, and writes it
 Two things to get right before it is public:
 
 - **Filter, don't dump.** Cards carry worker logs, transcripts, and error output that will contain paths, hostnames, and occasionally a token someone pasted. Export an allowlist of fields — title, status, labels, created/updated, public URL — never the whole card.
-- **Give the exporter its own read-only credential.** Do not run it as `main`.
+- **Give the exporter its own read-only credential.** Do not run it as `ichabod`.
 
 Treat it as one of the early experiments rather than part of the initial build.
 
@@ -1033,8 +1041,8 @@ Enable explicit ownership and add `mail_reader` before enabling IMAP. The follow
   agents: {
     ownership: "explicit",
     entries: {
-      main: {
-        workspace: "~/.openclaw/workspace-main",
+      ichabod: {
+        workspace: "~/.openclaw/workspace",
         sandbox: { mode: "off" }
       },
       mail_reader: {
@@ -1134,7 +1142,7 @@ Because the IMAP plugin cannot send, this is the one piece of plumbing to build 
 
 **Rate and volume.** Providers throttle submission, and an agent in a retry loop is exactly the traffic shape that trips it. Cap Ichabod at one digest per day plus per-card completion notices, and treat a `4xx` SMTP response as "retry with backoff", a `5xx` as "stop and record the failure on the card".
 
-Routine messages from `main` need no human approval. `AGENTS.md` supplies the behavioral boundary:
+Routine messages from `ichabod` need no human approval. `AGENTS.md` supplies the behavioral boundary:
 
 - freely email Zach
 - identify itself as Ichabod
@@ -1154,10 +1162,10 @@ Not in version 1 — the allowlist holds Zach's address only. Here is the shape 
 
 1. A **second IMAP account entry** (or the same mailbox with a second reader) whose `allowedSenders` holds only guest addresses and whose `agentId` points at a distinct reader.
 2. That reader writes cards labeled `guest` and stamps an explicit `authority: guest` field. It cannot write `authority: zach` because it never has that value.
-3. The **director refuses to dispatch a `guest` card to `main`.** It routes to a reduced-authority agent — no Docker, no publishing, no filesystem outside a scratch directory, no email except a reply to that one requester.
+3. The **director refuses to dispatch a `guest` card to `ichabod`.** It routes to a reduced-authority agent — no Docker, no publishing, no filesystem outside a scratch directory, no email except a reply to that one requester.
 4. "Minor" is defined concretely rather than left to judgment: research, summaries, and bounded computation that publishes nothing publicly and reads nothing Zach-owned.
 
-**The failure to design against** is promotion — a `guest` card that reaches `main` because a human or an automation moved it, or because the director's prompt was ambiguous. Make the check mechanical: the dispatch step reads the `authority` field and refuses, rather than the director being asked to remember.
+**The failure to design against** is promotion — a `guest` card that reaches `ichabod` because a human or an automation moved it, or because the director's prompt was ambiguous. Make the check mechanical: the dispatch step reads the `authority` field and refuses, rather than the director being asked to remember.
 
 Add guests one at a time, and only when a specific person has a specific reason.
 
@@ -1317,7 +1325,7 @@ The director specifies acceptance criteria:
 - health endpoint
 - public HTTPS URL
 
-It moves the card to `ready` and assigns `main` or a temporary worker.
+It moves the card to `ready` and assigns `ichabod` or a temporary worker.
 
 ## 3. Build and test
 

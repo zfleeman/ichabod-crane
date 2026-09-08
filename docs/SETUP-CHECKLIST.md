@@ -194,14 +194,14 @@ Reference: guide sections [4](ICHABOD-GUIDE.md#giving-ichabod-push-access) and [
 
 **Host execution**
 
-- [ ] Set sandbox off, exec host `gateway`, exec mode `full`, reviewer off, session permission mode `full`.
-- [ ] Inspect the effective result with `sandbox explain --agent main`, `exec-policy show`, and `security audit --deep` rather than trusting the commands blindly.
+- [ ] Set sandbox off, exec host `gateway`, exec security `full`, reviewer off, session permission mode `full`. The keys are `agents.entries.ichabod.sandbox.mode`, `tools.exec.host`, `tools.exec.security`, and `tools.exec.ask`; use `--strict-json` so the values are actually validated.
+- [ ] Inspect the effective result with `sandbox explain --agent ichabod`, `exec-policy show`, and `security audit --deep` rather than trusting the commands blindly.
 
 **Verify**
 
 - [ ] `ss -lntp | grep 18789` shows `127.0.0.1:18789`, never `0.0.0.0` or the public address.
 - [ ] `make ui` reaches the Control UI through the SSM port forward, and browser pairing works.
-- [ ] The five-step authority test passes from a main-agent session — directory, host command, image build, container start and removal, no approval prompt.
+- [ ] The five-step authority test passes from an `ichabod` session — directory, host command, image build, container start and removal, no approval prompt.
 - [ ] After a reboot: Docker, Traefik, the Gateway user service, and Claude authentication all return without a login.
 
 ---
@@ -218,7 +218,7 @@ Reference: guide section [9](ICHABOD-GUIDE.md#9-identity-agents-and-workboard).
 - [ ] Write `USER.md` — Zach's address, timezone, quiet hours, expertise, tooling, and working preferences. No credentials.
 - [ ] Seed `MEMORY.md` and state the promotion rule in `AGENTS.md`: a daily-log lesson that still matters in a month becomes one line here.
 - [ ] Create `/srv/ichabod/templates/agent-workspace` and the `new-agent` script that refuses to finish when the resulting `AGENTS.md` is missing the authority block. Keep both in Git.
-- [ ] Set `agents.ownership` to `explicit` and define the `main` entry — workspace path, sandbox off.
+- [ ] Set `agents.ownership` to `explicit` and define the `ichabod` entry — workspace path, sandbox off.
 - [ ] Define the `mail_reader` entry — its own workspace, sandbox `all` scoped to the session with `workspaceAccess: none`, minimal tool profile allowing only `session_status` and `workboard_create`, denying fs, runtime, web, browser, cron, gateway, and nodes.
 - [ ] `openclaw plugins enable workboard`, then restart the Gateway.
 - [ ] Create one board named `Ichabod` and the `zach`, `guest`, `maintenance`, `wild-work`, `website`, and `monitor` labels.
@@ -226,8 +226,8 @@ Reference: guide section [9](ICHABOD-GUIDE.md#9-identity-agents-and-workboard).
 **Verify**
 
 - [ ] Workboard survives a reboot and shows linked execution history.
-- [ ] `main` runs Docker directly with no approval.
-- [ ] `main` creates a temporary worker and a durable agent without Zach approving the operation.
+- [ ] `ichabod` runs Docker directly with no approval.
+- [ ] `ichabod` creates a temporary worker and a durable agent without Zach approving the operation.
 - [ ] `mail_reader` cannot reach shell, files, web, browser, Docker, or automations.
 
 ---
