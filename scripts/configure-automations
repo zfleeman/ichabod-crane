@@ -49,9 +49,11 @@ done
 # doing, unnoticed, for forty consecutive runs. A main-session system event has
 # no delivery to disable, and the CLI rejects the flag there.
 
-# Director. Hourly is the deliberate trade: a card can wait up to an hour,
-# and the box pays for 24 model sessions a day instead of 288. automations/
-# README.md has the note on making this event-driven later.
+# Director. Every 30 minutes, which is what Zach asked for on 2026-09-09 after
+# a day at 1h and a brief spell at 15m. Keep this in step with the live job:
+# the script removes and recreates, so a stale value here silently reverts a
+# schedule change made on the box. automations/README.md has the note on making
+# this event-driven later.
 #
 # All three run in isolated sessions. The main session was the obvious home for
 # the director — it is the operating loop — but a main-session job cannot carry
@@ -60,13 +62,13 @@ done
 # demonstrably runs on this box. Each pass reads the board at the start anyway,
 # so it needs no continuity from the last one.
 oc automations add --name director --display-name "Director pass" \
-  --agent ichabod --session isolated --every 1h \
+  --agent ichabod --session isolated --every 30m \
   --message "$(cat "$A/director.md")" \
   --timeout-seconds 1800 --no-deliver > /dev/null
 echo "added director"
 
 oc automations add --name scout --display-name "Scout pass" \
-  --agent ichabod --session isolated --cron "0 9 * * *" --tz America/Denver \
+  --agent ichabod --session isolated --cron "0 6,11,16,21 * * *" --tz America/Denver \
   --message "$(cat "$A/scout.md")" \
   --timeout-seconds 900 --no-deliver > /dev/null
 echo "added scout"
