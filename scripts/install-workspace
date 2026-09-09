@@ -52,6 +52,8 @@ fi
 
 rm -rf "$templates/agent-workspace"
 cp -R "$src/templates/agent-workspace" "$templates/agent-workspace"
+rm -rf "$templates/app"
+cp -R "$src/templates/app" "$templates/app"
 install -o openclaw -g openclaw -m 0755 "$src/templates/new-agent" "$templates/new-agent"
 install -o openclaw -g openclaw -m 0755 "$src/templates/new-agent-test" "$templates/new-agent-test"
 chown -R openclaw:openclaw "$templates"
