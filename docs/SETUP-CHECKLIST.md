@@ -280,11 +280,11 @@ Cards written by `mail_reader` are not yet constrained — the reader can set `s
 
 The one piece of plumbing to build rather than configure. The IMAP plugin is receive-only, so sending is a tool we own.
 
-- [ ] Build the outbound SMTP tool: submission on 587 with STARTTLS, the password read through a SecretRef, envelope sender and header `From` both `ichabod@ichabod-crane.net`.
-- [ ] Set `In-Reply-To` and `References` by searching for the original rather than reading it off the card. Search the mailbox for the sender and subject the card records, within its arrival window, and take the real `Message-ID` off the message. The session key on the card identifies the run, not the message, and will not help.
-- [ ] Give the tool a recipient allowlist holding only Zach — in the tool itself, not merely as an instruction in `AGENTS.md`.
-- [ ] Cap volume at one digest per day plus per-card completion notices. Treat SMTP `4xx` as retry with backoff and `5xx` as stop and record on the card.
-- [ ] Confirm the guest lane is **not** built. One allowlisted sender in version 1.
+- [x] Build the outbound SMTP tool: submission on 587 with STARTTLS, the password read through a SecretRef, envelope sender and header `From` both `ichabod@ichabod-crane.net`. Built as `plugins/smtp-send` and installed with `scripts/install-plugin smtp-send`.
+- [x] Set `In-Reply-To` and `References` by searching for the original rather than reading it off the card. Search the mailbox for the sender and subject the card records, within its arrival window, and take the real `Message-ID` off the message. The session key on the card identifies the run, not the message, and will not help. `mailbox_search` from [5c](#5c-mailbox-management) is what performs the search, and the instruction to do it lives in Ichabod's `AGENTS.md` — the tool itself only carries the headers it is handed.
+- [x] Give the tool a recipient allowlist holding only Zach — in the tool itself, not merely as an instruction in `AGENTS.md`.
+- [x] Cap volume at one digest per day plus per-card completion notices. Treat SMTP `4xx` as retry with backoff and `5xx` as stop and record on the card. The tool classifies the failure and caps sends per hour as a retry-loop backstop; the daily budget is a policy in `AGENTS.md`, because "one digest" is a judgement about content that no counter can make.
+- [x] Confirm the guest lane is **not** built. One allowlisted sender in version 1.
 
 **Verify**
 
@@ -296,15 +296,15 @@ The one piece of plumbing to build rather than configure. The IMAP plugin is rec
 
 The plugin never touches the mailbox — no moves, no flag changes, no backfill of mail that predates watching. So nothing archives a handled request, nothing marks anything read, and nothing finds an email from last week. That gap is a second small tool.
 
-- [ ] Build the mailbox management tool over `imaplib`: archive a message, mark one read, search history, fetch one by `Message-ID`.
-- [ ] Treat search as load-bearing, not a convenience. It is the only route from a triage card back to its message, since the card records a sender and subject and nothing more precise.
-- [ ] Grant it to `ichabod` only. It must not appear in `mail_reader`'s `tools.allow`, and it must never be the path by which unread mail first enters a session.
+- [x] Build the mailbox management tool: archive a message, mark one read, search history, fetch one by `Message-ID`. Built as `plugins/mailbox`, in TypeScript rather than Python — OpenClaw will not resolve a SecretRef under an `env` map, so an MCP server would mean a plaintext password in `openclaw.json`.
+- [x] Treat search as load-bearing, not a convenience. It is the only route from a triage card back to its message, since the card records a sender and subject and nothing more precise.
+- [x] Grant it to `ichabod` only. It must not appear in `mail_reader`'s `tools.allow`, and it must never be the path by which unread mail first enters a session.
 
 **Verify**
 
-- [ ] Ichabod can archive a handled message and mark it read, and the message is gone from `INBOX` in a mail client.
-- [ ] A history search returns a message that predates the plugin's first watch.
-- [ ] `mail_reader` cannot call the tool at all.
+- [x] Ichabod can archive a handled message and mark it read, and the message is gone from `INBOX` in a mail client.
+- [x] A history search returns a message that predates the plugin's first watch — uid 21, against a watch baseline of uid 22.
+- [x] `mail_reader` cannot call the tool at all. Checked from a live session's own toolset, which is `session_status` and `workboard_create` and nothing else, rather than from config.
 
 ---
 
