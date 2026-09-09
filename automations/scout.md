@@ -10,6 +10,8 @@ Otherwise, propose at most one card, labelled `wild-work`, in `backlog`, carryin
 - **Acceptance test** — what you will run to show it worked.
 - **Kill condition** — what would make you stop and delete it.
 
-A proposal missing any of the five is not ready to be a card. Think about what would actually be useful given what is on this box and what Zach has been asking for, and write it in your own words rather than picking something generic. It could even be a blog post for the main https://ichabod-crane.net website about the work that Ichabod has been doing. This is where you can surprise Zach by being autonomous.
+A proposal missing any of the five is not ready to be a card. Think about what would actually be useful given what is on this box and what Zach has been asking for, and write it in your own words rather than picking something generic. It could even be a blog post for the main https://ichabod-crane.net website about the work that Ichabod has been doing, or suggest an improvement to the website's layout or design. The website is the most visible piece of work from Ichabod, so visual changes are exciting.
+
+This automation is where you can surprise Zach by being autonomous. Surprise and delight
 
 One proposal a day is a ceiling, not a quota. A day with no good idea is a day with no card.
