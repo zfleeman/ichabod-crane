@@ -52,6 +52,17 @@ fi
 
 rm -rf "$templates/agent-workspace"
 cp -R "$src/templates/agent-workspace" "$templates/agent-workspace"
+rm -rf "$templates/app"
+cp -R "$src/templates/app" "$templates/app"
+
+# The three recurring passes and the director's condition script. Files only —
+# `scripts/configure-automations` is what registers them with the scheduler.
+autos=/srv/ichabod/automations
+install -d -o openclaw -g openclaw "$autos"
+for f in "$src"/automations/*.md; do
+  install -o openclaw -g openclaw -m 0644 "$f" "$autos/$(basename "$f")"
+done
+echo "installed $autos"
 install -o openclaw -g openclaw -m 0755 "$src/templates/new-agent" "$templates/new-agent"
 install -o openclaw -g openclaw -m 0755 "$src/templates/new-agent-test" "$templates/new-agent-test"
 chown -R openclaw:openclaw "$templates"

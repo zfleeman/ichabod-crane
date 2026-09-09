@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+# Register the three recurring passes with the Gateway's scheduler.
+#
+# Run from a checkout, on Zach's laptop, after `scripts/deploy-workspace` has
+# put the prompt files on the box. Idempotent, like configure-imap: rerunning
+# it is the way back to a known set of jobs.
+#
+# Each job is removed and recreated rather than edited in place. `--agent` is
+# honoured on create and silently ignored on an update, and a trigger with no
+# owner fails every single run with AGENT_SELECTION_REQUIRED.
+#
+# Usage: scripts/configure-automations
+
+set -euo pipefail
+
+export AWS_PROFILE="${AWS_PROFILE:-ZACH-ROOT}"
+export AWS_PAGER=""
+
+cd "$(dirname "$0")/.."
+instance="$(tofu -chdir=tofu output -raw instance_id)"
+
+read -r -d '' remote_script <<'REMOTE' || true
+set -euo pipefail
+# Deliberately not `sudo -iu openclaw`, which the other scripts use. The -i
+# login shell re-parses the command line, and these calls pass a whole Markdown
+# prompt as one argument: backticks in it become command substitution and the
+# line structure is flattened. Without -i the argument reaches execve intact.
+oc() { sudo -u openclaw env HOME=/home/openclaw /home/openclaw/.local/bin/openclaw "$@"; }
+A=/srv/ichabod/automations
+
+[ -f "$A/director.md" ] || { echo "no $A/director.md — run scripts/deploy-workspace first" >&2; exit 1; }
+
+# Names are ours, ids are the scheduler's, so an id has to be looked up rather
+# than remembered. trigger-probe is included because the probes used while
+# working this out should not outlive it.
+ids="$(oc automations list --all --json | python3 -c '
+import json, sys
+ours = {"director", "scout", "digest", "trigger-probe"}
+print(" ".join(j["id"] for j in json.load(sys.stdin)["jobs"] if j["name"] in ours))
+')"
+for id in $ids; do
+  oc automations rm "$id" > /dev/null
+  echo "removed $id"
+done
+
+# The two isolated jobs pass --no-deliver. Delivery defaults to a chat channel
+# this box does not have, and a job that cannot deliver fails closed even when
+# the work itself succeeded — which is what the stock heartbeat job had been
+# doing, unnoticed, for forty consecutive runs. A main-session system event has
+# no delivery to disable, and the CLI rejects the flag there.
+
+# Director. Hourly is the deliberate trade: a card can wait up to an hour,
+# and the box pays for 24 model sessions a day instead of 288. automations/
+# README.md has the note on making this event-driven later.
+#
+# All three run in isolated sessions. The main session was the obvious home for
+# the director — it is the operating loop — but a main-session job cannot carry
+# --message ("Main jobs require --system-event or --script"), and a job built
+# that way enqueued without ever producing a run. Isolated is the shape that
+# demonstrably runs on this box. Each pass reads the board at the start anyway,
+# so it needs no continuity from the last one.
+oc automations add --name director --display-name "Director pass" \
+  --agent ichabod --session isolated --every 1h \
+  --message "$(cat "$A/director.md")" \
+  --timeout-seconds 1800 --no-deliver > /dev/null
+echo "added director"
+
+oc automations add --name scout --display-name "Scout pass" \
+  --agent ichabod --session isolated --cron "0 9 * * *" --tz America/Denver \
+  --message "$(cat "$A/scout.md")" \
+  --timeout-seconds 900 --no-deliver > /dev/null
+echo "added scout"
+
+oc automations add --name digest --display-name "Daily digest" \
+  --agent ichabod --session isolated --cron "0 7 * * *" --tz America/Denver \
+  --message "$(cat "$A/digest.md")" \
+  --timeout-seconds 900 --no-deliver > /dev/null
+echo "added digest"
+
+# The stock heartbeat job wakes ichabod every 30 minutes with an empty payload
+# and no route to deliver it, so every run ends "heartbeat skipped: no-route" —
+# forty consecutive skips by the time anyone looked. The director pass is the
+# real loop, so the heartbeat is only noise that would hide a real failure in
+# the run history.
+#
+# Nothing here removes it, and that is not for want of trying. `automations rm`
+# and `automations disable` both refuse with "system-owned monitor jobs cannot
+# be edited by cron clients". Removing agents.defaults.heartbeat from the config
+# does not help either: the job is persisted in the scheduler's store and
+# survives both the config change and a Gateway restart. The config key is left
+# in place, because a heartbeat with no configured agent is a worse state than
+# one that skips.
+#
+# So the run history has a "skipped" line in it every 30 minutes. Read past it.
+
+oc automations list
+REMOTE
+
+# SSM runs each command with sh, which has no `pipefail`, so the script rides
+# over base64-encoded and is handed to bash on the far side. Same shape as
+# configure-imap.
+payload="$(printf '%s' "$remote_script" | base64 | tr -d '\n')"
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+
+remote="echo $payload | base64 -d > /tmp/configure-automations.sh && bash /tmp/configure-automations.sh"
+printf '{"commands":["%s"]}' "$remote" > "$tmp/params.json"
+
+command_id="$(aws ssm send-command --instance-ids "$instance" \
+  --document-name AWS-RunShellScript \
+  --parameters "file://$tmp/params.json" \
+  --query Command.CommandId --output text)"
+echo "sent $command_id, waiting..."
+
+aws ssm wait command-executed --command-id "$command_id" --instance-id "$instance" 2>/dev/null || true
+
+aws ssm get-command-invocation --command-id "$command_id" --instance-id "$instance" \
+  --query '[StandardOutputContent,StandardErrorContent]' --output text
+
+status="$(aws ssm get-command-invocation --command-id "$command_id" --instance-id "$instance" \
+  --query Status --output text)"
+[ "$status" = "Success" ] || { echo "configure-automations failed: $status" >&2; exit 1; }
