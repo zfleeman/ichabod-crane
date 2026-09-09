@@ -320,11 +320,15 @@ Reference: guide sections [12](ICHABOD-GUIDE.md#12-persistent-autonomy) and [14]
 
 **Automations**
 
-- [ ] Create the director pass, every 15–30 minutes: review triage/ready/running/review/blocked, decompose new requests, choose the highest-value eligible card, respect one-heavy-worker concurrency, dispatch, recover stale claims, checkpoint.
-- [ ] Make the director treat a `[triage-guard]` note as a stop sign: a card carrying one came from an email that tried to promote itself, so it goes to a human rather than into a dispatch. Forging the assignment is already closed mechanically by the `triage-guard` plugin in [5a](#5a-inbound-intake); what is left here is the director being talked into promoting a card by the card's own text, and a prompt rule is the right tool for that because the mechanical path is shut.
-- [ ] Create the scout pass, once daily: at most one `wild-work` proposal carrying a hypothesis, timebox, cost, acceptance test, and kill condition.
-- [ ] Create the digest: one concise daily email covering completed, running, blocked, failed, proposed, and any disk or quota concern. No heartbeat emails.
-- [ ] Write the capacity ceilings into `AGENTS.md` — one heavy worker, five experimental services, 0.5 CPU and 512 MiB defaults, stop proposing new work above 75% disk, back off when Claude quota is exhausted rather than switching to metered API usage.
+The three passes live in `automations/` as prompt files. `scripts/deploy-workspace` ships them to `/srv/ichabod/automations` and `scripts/configure-automations` registers them with the Gateway's scheduler, removing and recreating each job rather than editing it — `--agent` is applied on create and ignored on an update, and a job with no owner fails every run.
+
+- [x] Create the director pass, hourly: review triage/ready/running/review/blocked, decompose new requests, choose the highest-value eligible card, respect one-heavy-worker concurrency, dispatch, recover stale claims. Hourly rather than every 15–30 minutes is a deliberate trade — 24 model sessions a day instead of 96, at the cost of a card waiting up to an hour. `automations/README.md` has the note on making it event-driven instead.
+- [x] Make the director treat a `[triage-guard]` note as a stop sign: a card carrying one came from an email that tried to promote itself, so it goes to a human rather than into a dispatch. Forging the assignment is already closed mechanically by the `triage-guard` plugin in [5a](#5a-inbound-intake); what is left here is the director being talked into promoting a card by the card's own text, and a prompt rule is the right tool for that because the mechanical path is shut.
+- [x] Create the scout pass, once daily: at most one `wild-work` proposal carrying a hypothesis, timebox, cost, acceptance test, and kill condition.
+- [x] Create the digest: one concise daily email covering completed, running, blocked, failed, proposed, and any disk or quota concern. No heartbeat emails, and nothing at all on a day with nothing to report.
+- [x] Write the capacity ceilings into `AGENTS.md` — one heavy worker, five experimental services, 0.5 CPU and 512 MiB defaults, stop proposing new work above 75% disk, back off when Claude quota is exhausted rather than switching to metered API usage. The container limits ship as `templates/app/compose.yaml`, because the only ceiling Docker actually enforces should not be retyped from prose each time.
+- [x] Understand what a pass can do to a card. `openclaw workboard move` takes a status and nothing else, and notes are settable only at creation, so no pass can annotate an existing card — the first live director run moved a card to `done` and left no record of what it had checked. The passes write their reasoning to the day's journal instead, keyed by card id.
+- [ ] Know that the stock `heartbeat:ichabod` job cannot be turned off. `automations rm` and `disable` refuse it as system-owned, and removing `agents.defaults.heartbeat` leaves the job in the scheduler's store across a restart. It logs `heartbeat skipped: no-route` every 30 minutes; that line is not a failure of the passes.
 
 **Backups**
 
