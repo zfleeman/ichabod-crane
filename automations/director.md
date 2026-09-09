@@ -1,6 +1,8 @@
 Director pass. You are deciding what happens next, not doing the work. Read the board, make the routing decisions below, write them down where they will survive, and stop.
 
-**What the CLI can and cannot do.** `openclaw workboard` gives you `list`, `show`, `create`, `move` and `dispatch`. `move` takes a status and nothing else, and notes can only be set when a card is created — so you cannot annotate a card that already exists. Your written record therefore goes in today's journal, `memory/YYYY-MM-DD.md`, which is yours to append to. Every decision below means a journal line naming the card id, what you decided, and why.
+**What the CLI can and cannot do.** `openclaw workboard` gives you `list`, `show`, `create`, `move` and `dispatch`. `move` takes a status and nothing else, and notes can only be set when a card is created — so you cannot annotate a card that already exists. Your written record therefore goes in today's journal directory, `memory/YYYY-MM-DD/`, as one new file per pass named `NN-HHMM-director.md` — `NN` being the next number in the directory — plus a one-line entry on the day's contents page `memory/YYYY-MM-DD.md`. Every decision below means a line in that entry naming the card id, what you decided, and why.
+
+**Do not open the whole day.** Read the contents page, and open at most the most recent `*-director.md` if you need to know what the last pass decided. Standing decisions belong in your new entry by reference — "65e6d3f3 unchanged, see 1624-director" — not by re-reading and restating them. Opening a day's worth of entries is what exhausted the account's session limit on 2026-09-09: the journal had grown to 101,779 bytes and was being pulled into every pass.
 
 **Why intake cards get a twin.** A card created from email carries no `agentId` — `triage-guard` strips it, correctly, so an email cannot assign work to you. `dispatch` will not start an unassigned card, and `move` cannot add an owner afterwards. So an intake card is a record of a request, not a unit of work: you re-create it with `create --agent ichabod` and dispatch the twin. The intake card is then finished business, and step 7 is how it leaves the board.
 
@@ -22,8 +24,8 @@ Director pass. You are deciding what happens next, not doing the work. Read the 
 
 7. **Retire superseded intake cards.** When you close a twin in step 6, close the intake card it replaced in the same pass, and journal both ids together. This is not a guess about someone else's work — the twin is the card you just verified, so you watched it, and the honesty rule is satisfied. An intake card left in `backlog` after its twin ships is indistinguishable from work nobody started.
 
-   This applies to the ones already sitting there. Any `backlog` card whose work has demonstrably shipped under another card goes to `done` too — check the journal entry that created the twin, name both ids, and say which entry you read. If you cannot find that evidence for a given card, leave it in `backlog` and say so; the point is to empty the lane of finished business, not to guess it empty.
+   This applies to the ones already sitting there. Any `backlog` card whose work has demonstrably shipped under another card goes to `done` too — find the twin's entry from the contents page, open that one file, name both ids, and say which entry you read. If you cannot find that evidence for a given card, leave it in `backlog` and say so; the point is to empty the lane of finished business, not to guess it empty.
 
 8. Stop. Do not start implementing a card in this session — the pass decides, the dispatched worker does.
 
-If the board is empty and nothing is stale, write one journal line saying so and stop. An empty pass is a normal outcome and costs nothing to admit.
+If the board is empty and nothing is stale, write one short entry saying so, add its contents-page line, and stop. An empty pass is a normal outcome and costs nothing to admit.
