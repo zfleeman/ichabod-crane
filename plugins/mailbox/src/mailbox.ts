@@ -27,6 +27,11 @@ export const ConfigSchema = Type.Object({
 export type Config = Static<typeof ConfigSchema>;
 
 export const SearchParamsSchema = Type.Object({
+  mailbox: Type.Optional(
+    Type.String({
+      description: "Folder to search. Defaults to the configured inbox. Use the archive folder to search handled mail.",
+    }),
+  ),
   from: Type.Optional(Type.String({ description: "Match the From header." })),
   subject: Type.Optional(Type.String({ description: "Match the Subject header." })),
   body: Type.Optional(
@@ -45,6 +50,9 @@ export const SearchParamsSchema = Type.Object({
 export type SearchParams = Static<typeof SearchParamsSchema>;
 
 export const TargetSchema = Type.Object({
+  mailbox: Type.Optional(
+    Type.String({ description: "Folder the message is in. Defaults to the configured inbox." }),
+  ),
   messageId: Type.Optional(Type.String({ description: "Message-ID, angle brackets included." })),
   uid: Type.Optional(Type.Number({ description: "IMAP UID within the configured mailbox." })),
 });
@@ -84,6 +92,8 @@ export function buildSearchCriteria(params: SearchParams): Record<string, unknow
   if (params.since) criteria.since = parseDate(params.since, "since");
   if (params.before) criteria.before = parseDate(params.before, "before");
   if (typeof params.seen === "boolean") criteria.seen = params.seen;
+  // `mailbox` is deliberately not a criterion. Naming a folder is not a search
+  // term, so "search the archive" with nothing else is still refused.
   if (Object.keys(criteria).length === 0) {
     throw new Error("mailbox: give at least one search term. Refusing to return the whole mailbox.");
   }

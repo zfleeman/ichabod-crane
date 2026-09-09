@@ -76,14 +76,6 @@
   "activation": {
     "onStartup": true
   },
-  "contracts": {
-    "tools": [
-      "mailbox_search",
-      "mailbox_fetch",
-      "mailbox_mark_read",
-      "mailbox_archive"
-    ]
-  },
   "configContracts": {
     "secretInputs": {
       "paths": [
@@ -93,5 +85,13 @@
         }
       ]
     }
+  },
+  "contracts": {
+    "tools": [
+      "mailbox_search",
+      "mailbox_fetch",
+      "mailbox_mark_read",
+      "mailbox_archive"
+    ]
   }
 }
