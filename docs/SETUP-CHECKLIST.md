@@ -321,7 +321,7 @@ Reference: guide sections [12](ICHABOD-GUIDE.md#12-persistent-autonomy) and [14]
 **Automations**
 
 - [ ] Create the director pass, every 15–30 minutes: review triage/ready/running/review/blocked, decompose new requests, choose the highest-value eligible card, respect one-heavy-worker concurrency, dispatch, recover stale claims, checkpoint.
-- [ ] Before that pass can dispatch anything, make it force every `mail_reader`-created card to `triage` on sight, ignoring the `status`, `agentId`, and `workspace` the card arrived with, and recording those arrival values as evidence. This is a mechanical check in the dispatch step, not a line in the director's prompt — a prompt is exactly what an injected email talks its way around.
+- [ ] Make the director treat a `[triage-guard]` note as a stop sign: a card carrying one came from an email that tried to promote itself, so it goes to a human rather than into a dispatch. Forging the assignment is already closed mechanically by the `triage-guard` plugin in [5a](#5a-inbound-intake); what is left here is the director being talked into promoting a card by the card's own text, and a prompt rule is the right tool for that because the mechanical path is shut.
 - [ ] Create the scout pass, once daily: at most one `wild-work` proposal carrying a hypothesis, timebox, cost, acceptance test, and kill condition.
 - [ ] Create the digest: one concise daily email covering completed, running, blocked, failed, proposed, and any disk or quota concern. No heartbeat emails.
 - [ ] Write the capacity ceilings into `AGENTS.md` — one heavy worker, five experimental services, 0.5 CPU and 512 MiB defaults, stop proposing new work above 75% disk, back off when Claude quota is exhausted rather than switching to metered API usage.
