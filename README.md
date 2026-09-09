@@ -74,7 +74,7 @@ docs/     ICHABOD-GUIDE.md is the reasoning; SETUP-CHECKLIST.md is the build ord
 tofu/     The machine, DNS, alarms
 scripts/  Reproducible config: agents, IMAP, workspaces, plugin installs
 plugins/  smtp-send, mailbox, and triage-guard — typed OpenClaw plugins
-workspace/            Ichabod's identity and operating rules
+workspace/            Ichabod's identity and operating rules, plus skills/ for the procedures he only sometimes needs
 workspace-mail-reader/  The reader's rules. Short on purpose
 templates/            Scaffolding for agents Ichabod creates itself
 ```

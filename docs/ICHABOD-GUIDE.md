@@ -106,7 +106,9 @@ OpenClaw is the persistent operating layer:
 
 ## How memory is actually stored
 
-Markdown files are the native pattern, not a workaround. OpenClaw loads `AGENTS.md`, `SOUL.md`, `IDENTITY.md`, `USER.md`, and a curated `MEMORY.md` (capped around 4,000 characters) into the prompt, and keeps detailed daily logs in `memory/YYYY-MM-DD.md` that memory tools retrieve on demand instead of injecting every turn. There is no database-backed workspace memory to switch to. [Agent workspaces](https://docs.openclaw.ai/agent-workspace)
+Markdown files are the native pattern, not a workaround. The workspace holds `AGENTS.md`, `SOUL.md`, `IDENTITY.md`, `USER.md`, and a curated `MEMORY.md`, plus detailed daily logs under `memory/YYYY-MM-DD/` that memory tools retrieve on demand instead of injecting every turn. There is no database-backed workspace memory to switch to. [Agent workspaces](https://docs.openclaw.ai/agent-workspace)
+
+Only `AGENTS.md` is actually injected. It is easy to read the list above as "OpenClaw loads all of these into the prompt," and this guide used to say exactly that, but a session's own `prompt_snapshot` shows one file under `# Project Context` and it is `AGENTS.md`. `SOUL.md`, `IDENTITY.md`, `USER.md` and `MEMORY.md` are read only when the agent reads them — which it will, as a tool call, paying for the whole file and re-sending it on every turn afterwards. Write `AGENTS.md` as the thing that is always true, and reach for the others with `memory_search` rather than a whole-file read.
 
 The durable part is already a database: sessions, Workboard cards, automations, and secrets live in SQLite under `~/.openclaw/`. So the split is markdown for what the model reads, SQLite for what the Gateway tracks. Keep it — the alternative is bolting on tooling OpenClaw would not use. When a *project* needs structured recall (the GPU-deal history, for example), give that project its own Postgres container; do not try to relocate agent memory.
 
