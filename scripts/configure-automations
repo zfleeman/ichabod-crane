@@ -39,18 +39,25 @@ for id in $ids; do
   echo "removed $id"
 done
 
-# Every job passes --no-deliver. Delivery defaults to a chat channel this box
-# does not have, and a job that cannot deliver fails closed even when the work
-# itself succeeded — which is what the stock heartbeat job had been doing,
-# unnoticed, for forty consecutive runs.
+# The two isolated jobs pass --no-deliver. Delivery defaults to a chat channel
+# this box does not have, and a job that cannot deliver fails closed even when
+# the work itself succeeded — which is what the stock heartbeat job had been
+# doing, unnoticed, for forty consecutive runs. A main-session system event has
+# no delivery to disable, and the CLI rejects the flag there.
 
 # Director. Hourly is the deliberate trade: a card can wait up to an hour,
 # and the box pays for 24 model sessions a day instead of 288. automations/
 # README.md has the note on making this event-driven later.
+#
+# A job targeting the main session cannot carry --message: the CLI refuses with
+# "Main jobs require --system-event or --script". The pass wants the main
+# session's continuity, so the prompt goes in as a system event instead, and
+# --wake now means it does not sit waiting for a heartbeat that is about to be
+# disabled two blocks down.
 oc automations add --name director --display-name "Director pass" \
-  --agent ichabod --session main --every 1h \
-  --message "$(cat "$A/director.md")" \
-  --timeout-seconds 1800 --no-deliver > /dev/null
+  --agent ichabod --session main --every 1h --wake now \
+  --system-event "$(cat "$A/director.md")" \
+  --timeout-seconds 1800 > /dev/null
 echo "added director"
 
 # Scout and digest run in isolated sessions. Both are short, self-contained,
@@ -69,24 +76,39 @@ oc automations add --name digest --display-name "Daily digest" \
 echo "added digest"
 
 # The stock heartbeat job wakes ichabod every 30 minutes with an empty payload
-# and no route to deliver it, so every run ends "heartbeat skipped: no-route".
-# The director pass is the real loop; this one is only noise in the history.
-hb="$(oc automations list --all --json | python3 -c '
-import json, sys
-print(next((j["id"] for j in json.load(sys.stdin)["jobs"]
-            if j.get("declarationKey") == "heartbeat:ichabod"), ""))
-')"
-if [ -n "$hb" ]; then
-  oc automations disable "$hb" > /dev/null
-  echo "disabled heartbeat $hb"
+# and no route to deliver it, so every run ends "heartbeat skipped: no-route" —
+# forty consecutive skips by the time anyone looked. The director pass is the
+# real loop, so the heartbeat is only noise that would hide a real failure in
+# the run history.
+#
+# It cannot be removed with `automations rm`: it is system-owned, and the CLI
+# refuses with "system-owned monitor jobs cannot be edited by cron clients".
+# The job exists because this config key exists, so the key is what goes.
+if oc config get agents.defaults.heartbeat > /dev/null 2>&1; then
+  oc config unset agents.defaults.heartbeat
+  # System-owned jobs are reconciled at startup, so the job outlives the config
+  # change until the Gateway restarts. This restarts ichabod's session too.
+  sudo -iu openclaw systemctl --user restart openclaw-gateway
+  sleep 8
+  sudo -iu openclaw systemctl --user is-active openclaw-gateway
+  echo "heartbeat: config key removed"
+else
+  echo "heartbeat: already absent"
 fi
 
 oc automations list
 REMOTE
 
+# SSM runs each command with sh, which has no `pipefail`, so the script rides
+# over base64-encoded and is handed to bash on the far side. Same shape as
+# configure-imap.
+payload="$(printf '%s' "$remote_script" | base64 | tr -d '\n')"
+
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
-python3 -c 'import json,sys; print(json.dumps({"commands":[sys.stdin.read()]}))' <<< "$remote_script" > "$tmp/params.json"
+
+remote="echo $payload | base64 -d > /tmp/configure-automations.sh && bash /tmp/configure-automations.sh"
+printf '{"commands":["%s"]}' "$remote" > "$tmp/params.json"
 
 command_id="$(aws ssm send-command --instance-ids "$instance" \
   --document-name AWS-RunShellScript \
@@ -94,14 +116,11 @@ command_id="$(aws ssm send-command --instance-ids "$instance" \
   --query Command.CommandId --output text)"
 echo "sent $command_id, waiting..."
 
-status=Pending
-for _ in $(seq 30); do
-  status="$(aws ssm get-command-invocation --command-id "$command_id" --instance-id "$instance" \
-    --query Status --output text 2>/dev/null || echo Pending)"
-  case "$status" in InProgress | Pending | Delayed) sleep 2 ;; *) break ;; esac
-done
+aws ssm wait command-executed --command-id "$command_id" --instance-id "$instance" 2>/dev/null || true
 
 aws ssm get-command-invocation --command-id "$command_id" --instance-id "$instance" \
   --query '[StandardOutputContent,StandardErrorContent]' --output text
 
+status="$(aws ssm get-command-invocation --command-id "$command_id" --instance-id "$instance" \
+  --query Status --output text)"
 [ "$status" = "Success" ] || { echo "configure-automations failed: $status" >&2; exit 1; }
