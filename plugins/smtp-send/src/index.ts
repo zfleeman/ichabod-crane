@@ -37,6 +37,12 @@ export default defineToolPlugin({
         }
 
         assertAllowedRecipient(params.to, config.allowedRecipients);
+
+        // Built before the try, not inside it. A rejected Message-ID is a
+        // permanent input error, and classifySmtpError sees no SMTP code on it
+        // — so thrown from inside the try it came back labelled "safe to retry
+        // with backoff", advising a retry that can only fail identically.
+        const message = buildMessage(params, config);
         checkRateLimit(Date.now(), config.maxPerHour);
 
         const transport = nodemailer.createTransport({
@@ -47,7 +53,7 @@ export default defineToolPlugin({
         });
 
         try {
-          const info = await transport.sendMail(buildMessage(params, config));
+          const info = await transport.sendMail(message);
           return {
             ok: true,
             messageId: info.messageId,
