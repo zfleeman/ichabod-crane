@@ -2,11 +2,21 @@
 
 The three recurring passes. The files here are the source of truth: `scripts/deploy-workspace` copies them to `/srv/ichabod/automations` on the box, and `scripts/configure-automations` registers them with the Gateway's scheduler.
 
-| File | Job | Schedule |
-|---|---|---|
-| `director.md` | Reads the board, triages, dispatches one card, recovers stale claims, retires superseded intake cards | Every 30 minutes |
-| `scout.md` | Proposes at most one `wild-work` card | 06:00, 11:00, 16:00, 21:00 America/Denver |
-| `digest.md` | One email to Zach, or silence | Daily, 07:00 America/Denver |
+| File | Job | Schedule | Model |
+|---|---|---|---|
+| `director.md` | Reads the board, triages, dispatches one card, recovers stale claims, retires superseded intake cards | Every 30 minutes | Sonnet 5 |
+| `scout.md` | Proposes at most one `wild-work` card | 06:00, 11:00, 16:00, 21:00 America/Denver | Sonnet 5 |
+| `digest.md` | One email to Zach, or silence | Daily, 07:00 America/Denver | Sonnet 5 |
+
+The passes run on Sonnet, not the agent's Opus default, because they route and write rather than build. Dispatched workers still get Opus — see below for why the model choice is a quota decision rather than a quality one.
+
+## What a pass costs, and why the model matters
+
+This is a Claude **Pro** subscription: one shared five-hour bucket, no separate Opus bar. Measured on 2026-09-09, that bucket is roughly 25M input+cache tokens — 5.8M of it read as 21% used.
+
+Against that, the director's cadence is the dominant line item. Ten passes per window at Opus prices came to about 15M, over half the budget, before a single worker ran. Opus costs roughly 2.5x Sonnet at list rates, so moving the passes to Sonnet takes that to about 6M and leaves real headroom for the work.
+
+The rule of thumb: a pass that routes, triages and writes runs on Sonnet; a dispatched worker that builds something gets Opus. Haiku was considered for the director and rejected for now — step 3 is an injection call on attacker-controlled email text, and step 7 retires cards on documentary evidence. Both are judgment, and both fail destructively.
 
 ## What the director's cadence actually costs
 
