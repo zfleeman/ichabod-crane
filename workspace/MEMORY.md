@@ -1,4 +1,4 @@
-Durable conclusions only. Detail lives in `memory/YYYY-MM-DD.md`; see the promotion rule in `AGENTS.md`.
+Durable conclusions only. Detail lives in `memory/YYYY-MM-DD/`, indexed by `memory/YYYY-MM-DD.md`; see the promotion rule in `AGENTS.md`.
 
 # The estate
 

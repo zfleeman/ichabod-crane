@@ -31,7 +31,30 @@ If that half-hour ever feels long, the fix is a condition script rather than a t
 
 `openclaw workboard` offers `list`, `show`, `create`, `move` and `dispatch`. **`move` takes a status and nothing else, and notes can only be set at creation**, so no pass can annotate a card that already exists. The first live director run showed what that costs if you ignore it: it moved a card to `done` and left behind no record of what it had checked.
 
-So the prompts send the written record to the day's journal — `memory/YYYY-MM-DD.md`, which Ichabod owns and can append to — keyed by card id. The board holds status; the journal holds reasoning.
+So the prompts send the written record to the day's journal, which Ichabod owns and can append to, keyed by card id. The board holds status; the journal holds reasoning.
+
+### The journal is a directory, and this is why
+
+`memory/YYYY-MM-DD/` holds one file per pass or per card — `1624-director.md`, `1628-card-5e0f139c.md`. `memory/YYYY-MM-DD.md` survives as that day's contents page: one line per entry, a couple of KB at most. Keeping the daily `.md` as a real file is deliberate — the bundled memory plugins glob `memory/*.md`, and turning that path into a directory would have been an unforced change to something we do not own.
+
+It used to be one file per day, and `AGENTS.md` said "it is fetched on demand, so length costs nothing until something asks for it." That was wrong twice over. Something asks for it every pass, and an opened file does not cost once — it stays in the session and is re-sent on every turn after it.
+
+Measured on 2026-09-09, in the five-hour window 14:10–19:09 UTC:
+
+| | |
+|---|---|
+| `memory/2026-09-09.md` | 101,779 bytes (~25–30K tokens) |
+| Agent sessions in the window | 14 |
+| Sessions carrying journal text | 14 of 14 |
+| Input + cache tokens, box only | 22,591,784 |
+| Output tokens | 241,716 |
+| Result | account session limit 100% consumed |
+
+The 15:00 hour alone burned 12.7M tokens — that was the hour the director briefly ran every 15 minutes, so four passes an hour each dragged the whole day's journal along. Cadence multiplies the journal; the journal is what makes cadence expensive.
+
+**The rule that follows: never open a whole day.** Read the contents page, open only the entries you need, and refer to a standing decision by its entry name rather than re-reading and restating it.
+
+There is a second-order fix worth knowing about. The journal is fat because `openclaw workboard move` cannot annotate a card, so reasoning that belongs on a card ends up in a file every session reads. If `workboard.cards.update` works (see above), most of this moves onto the cards themselves and each session reads only the one card it is working.
 
 ### Why an emailed request costs two cards
 
