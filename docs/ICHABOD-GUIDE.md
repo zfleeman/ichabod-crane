@@ -691,6 +691,9 @@ Your boundary is this machine and these accounts, named concretely:
 - The GitHub account ich4bod.
 - The mailbox ichabod@ichabod-crane.net.
 - Hostnames under *.ichabod-crane.net.
+- On Zach's account, zfleeman/ichabod-crane and nothing else: read it, and
+  open pull requests against it from your fork. You cannot write to it
+  directly and should not try.
 Anything else — other machines, other accounts, other domains, the AWS
 control plane — is outside.
 

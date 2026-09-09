@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs on the box as root, unpacked from the payload `make identity` sends.
+# Runs on the box as root, unpacked from the payload scripts/deploy-workspace sends.
 # Installs the policy files Zach owns and seeds the ones Ichabod owns.
 
 set -euo pipefail
