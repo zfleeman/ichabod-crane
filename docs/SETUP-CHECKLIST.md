@@ -289,7 +289,7 @@ The one piece of plumbing to build rather than configure. The IMAP plugin is rec
 **Verify**
 
 - [x] Ichabod can send Zach a reply from the custom address. Verified by a real send: Ichabod worked card `48f47eae`, found the original with `mailbox_search`, and `smtp_send` returned `ok: true` with Zach accepted.
-- [ ] The reply threads under the original request in a mail client, rather than starting a new conversation. Needs a human with a mail client; the tool's side is done, and it now refuses a `Message-ID` it cannot thread rather than sending a header that fails silently.
+- [x] The reply threads under the original request in a mail client, rather than starting a new conversation. Confirmed by Zach in his own client. The tool also refuses a `Message-ID` it cannot thread, rather than sending a header that fails silently at both ends.
 - [x] The SMTP password never reaches model context or a transcript. It is not a tool parameter, so it cannot appear in a call; config holds a SecretRef that reads back redacted with `unresolved=0`; the store refuses to hand a secret-kind value back at all; and the tool redacts the value out of SMTP error text before it can reach a card.
 
 ### 5c. Mailbox management
