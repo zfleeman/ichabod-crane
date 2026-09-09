@@ -4,3 +4,6 @@
 # Plugin build output and dependencies.
 node_modules/
 plugins/*/dist/
+
+# Reference material, not part of this project. Kept locally, not committed.
+sammy-clone-kit/
