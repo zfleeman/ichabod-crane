@@ -39,7 +39,20 @@ So the prompts send the written record to the day's journal — `memory/YYYY-MM-
 
 The cost is a duplicate card per emailed request, and the trap is what happens to the original: it goes to `backlog`, and for a while nothing took it out again. Seven of them accumulated in one day, each one a finished request that read as unstarted work. The director prompt now closes the intake card in the same pass that closes its twin.
 
-The real fix is upstream, and it is not built: either a per-board default owner, or `move` learning `--agent` the way `create` has it. Until one of those exists, expect the twins.
+### A likely way out, not yet verified
+
+The CLI is not the whole surface. The Gateway registers `workboard.cards.update` under the write scope, and `openclaw gateway call <method> --params <json>` can reach it from a shell on the box. The handler's `readPatch` passes the patch object straight through to the store rather than filtering it to a fixed field list, so this should assign an existing card:
+
+```bash
+openclaw gateway call workboard.cards.update \
+  --params '{"id":"<card-id>","agentId":"ichabod"}'
+```
+
+If that works, the twin goes away entirely: the director assigns the intake card and dispatches it in place.
+
+**This has not been run.** It is read off the shipped JavaScript, which is exactly the kind of evidence this project has learned not to trust — `config validate` and `sandbox explain` were both read-correct and wrong. Verify it against a live card before putting it in `director.md`, and check what it does to the card's `workspaceAccess`, since the handler strips that field from the patch and `dispatch --admin` exists precisely because restricted cards will not start on `ichabod`.
+
+The alternative fix, if that one does not pan out, is a per-board default owner. The Control UI has a "Default agent" label and the bundle carries a `defaultAgentId`, but nothing in the server-side extension code references it, and the workboard plugin config on the box is bare `{"enabled": true}` — so it may be UI-only. Until one of the two is confirmed, expect the twins.
 
 ## Things that cost time to discover
 
