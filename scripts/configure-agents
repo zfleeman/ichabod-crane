@@ -39,6 +39,25 @@ oc config set agents.ownership '"explicit"' --strict-json
 oc config set agents.entries.ichabod.workspace '"/home/openclaw/.openclaw/workspace"' --strict-json
 oc config set agents.entries.ichabod.sandbox '{"mode":"off"}' --strict-json
 
+# ichabod's model chain. The fallback ids have to be names the Claude CLI
+# itself accepts, not just names OpenClaw's catalog lists. The box shipped with
+# "anthropic/claude-haiku-4.5" as fallback #2, which `openclaw models list`
+# displayed quite happily while every use of it failed:
+#
+#   claude-haiku-4.5              -> [claude-code:unrecognized_model]
+#   claude-haiku-4-5-20251001     -> reaches the API
+#
+# Two separate things were wrong and the first hid the second. The model was
+# never declared here, so OpenClaw had no runtime mapping for it; declaring it
+# then exposed that the id itself is not one the CLI knows. A fallback nobody
+# exercises fails only when the primary is already down, which is the worst
+# time to discover it. Verify a change here by running the model, not by
+# reading the config: `openclaw agent --agent ichabod --model <id> --message ok`.
+oc config set 'agents.defaults.models["anthropic/claude-haiku-4-5-20251001"]' \
+  '{"agentRuntime":{"id":"claude-cli"}}' --strict-json
+oc config set agents.entries.ichabod.model \
+  '{"primary":"anthropic/claude-opus-5","fallbacks":["anthropic/claude-sonnet-5","anthropic/claude-haiku-4-5-20251001"]}' --strict-json
+
 # mail_reader: registered only if it is not already in the roster. `agents add`
 # fails on an existing id, and this script has to be safe to rerun.
 if ! oc agents list 2>/dev/null | grep -q mail_reader; then
