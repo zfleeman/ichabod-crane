@@ -1,0 +1,107 @@
+#!/usr/bin/env bash
+# Register the three recurring passes with the Gateway's scheduler.
+#
+# Run from a checkout, on Zach's laptop, after `scripts/deploy-workspace` has
+# put the prompt files on the box. Idempotent, like configure-imap: rerunning
+# it is the way back to a known set of jobs.
+#
+# Each job is removed and recreated rather than edited in place. `--agent` is
+# honoured on create and silently ignored on an update, and a trigger with no
+# owner fails every single run with AGENT_SELECTION_REQUIRED.
+#
+# Usage: scripts/configure-automations
+
+set -euo pipefail
+
+export AWS_PROFILE="${AWS_PROFILE:-ZACH-ROOT}"
+export AWS_PAGER=""
+
+cd "$(dirname "$0")/.."
+instance="$(tofu -chdir=tofu output -raw instance_id)"
+
+read -r -d '' remote_script <<'REMOTE' || true
+set -euo pipefail
+oc() { sudo -iu openclaw openclaw "$@"; }
+A=/srv/ichabod/automations
+
+[ -f "$A/director.md" ] || { echo "no $A/director.md — run scripts/deploy-workspace first" >&2; exit 1; }
+
+# Names are ours, ids are the scheduler's, so an id has to be looked up rather
+# than remembered. trigger-probe is included because the probes used while
+# working this out should not outlive it.
+ids="$(oc automations list --all --json | python3 -c '
+import json, sys
+ours = {"director", "scout", "digest", "trigger-probe"}
+print(" ".join(j["id"] for j in json.load(sys.stdin)["jobs"] if j["name"] in ours))
+')"
+for id in $ids; do
+  oc automations rm "$id" > /dev/null
+  echo "removed $id"
+done
+
+# Every job passes --no-deliver. Delivery defaults to a chat channel this box
+# does not have, and a job that cannot deliver fails closed even when the work
+# itself succeeded — which is what the stock heartbeat job had been doing,
+# unnoticed, for forty consecutive runs.
+
+# Director. Hourly is the deliberate trade: a card can wait up to an hour,
+# and the box pays for 24 model sessions a day instead of 288. automations/
+# README.md has the note on making this event-driven later.
+oc automations add --name director --display-name "Director pass" \
+  --agent ichabod --session main --every 1h \
+  --message "$(cat "$A/director.md")" \
+  --timeout-seconds 1800 --no-deliver > /dev/null
+echo "added director"
+
+# Scout and digest run in isolated sessions. Both are short, self-contained,
+# and read what they need off the board, so neither has any business landing in
+# the middle of whatever the main session is doing.
+oc automations add --name scout --display-name "Scout pass" \
+  --agent ichabod --session isolated --cron "0 9 * * *" --tz America/Denver \
+  --message "$(cat "$A/scout.md")" \
+  --timeout-seconds 900 --no-deliver > /dev/null
+echo "added scout"
+
+oc automations add --name digest --display-name "Daily digest" \
+  --agent ichabod --session isolated --cron "0 7 * * *" --tz America/Denver \
+  --message "$(cat "$A/digest.md")" \
+  --timeout-seconds 900 --no-deliver > /dev/null
+echo "added digest"
+
+# The stock heartbeat job wakes ichabod every 30 minutes with an empty payload
+# and no route to deliver it, so every run ends "heartbeat skipped: no-route".
+# The director pass is the real loop; this one is only noise in the history.
+hb="$(oc automations list --all --json | python3 -c '
+import json, sys
+print(next((j["id"] for j in json.load(sys.stdin)["jobs"]
+            if j.get("declarationKey") == "heartbeat:ichabod"), ""))
+')"
+if [ -n "$hb" ]; then
+  oc automations disable "$hb" > /dev/null
+  echo "disabled heartbeat $hb"
+fi
+
+oc automations list
+REMOTE
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+python3 -c 'import json,sys; print(json.dumps({"commands":[sys.stdin.read()]}))' <<< "$remote_script" > "$tmp/params.json"
+
+command_id="$(aws ssm send-command --instance-ids "$instance" \
+  --document-name AWS-RunShellScript \
+  --parameters "file://$tmp/params.json" \
+  --query Command.CommandId --output text)"
+echo "sent $command_id, waiting..."
+
+status=Pending
+for _ in $(seq 30); do
+  status="$(aws ssm get-command-invocation --command-id "$command_id" --instance-id "$instance" \
+    --query Status --output text 2>/dev/null || echo Pending)"
+  case "$status" in InProgress | Pending | Delayed) sleep 2 ;; *) break ;; esac
+done
+
+aws ssm get-command-invocation --command-id "$command_id" --instance-id "$instance" \
+  --query '[StandardOutputContent,StandardErrorContent]' --output text
+
+[ "$status" = "Success" ] || { echo "configure-automations failed: $status" >&2; exit 1; }
