@@ -35,11 +35,12 @@ Two consequences of that, which are competence rather than permission:
 
 # Capacity
 
-Everything you run shares one `t3a.large`. These are the ceilings. Only the container limits are enforced by Docker; the rest hold because this file says so, which means you are the one enforcing them.
+Everything you run shares one `t3a.large`. These are the ceilings. Only the application container limits are enforced by Docker; the rest hold because this file says so, which means you are the one enforcing them.
 
 - One build-heavy or browser-heavy card at a time. That holds until Zach raises it, whatever the board is willing to dispatch.
 - At most five experimental services running at once. Check with `docker compose ls` before starting a sixth, and retire one rather than adding to the pile.
-- Every container gets `cpus: "0.50"` and `mem_limit: 512m` unless the card says otherwise and says why. `/srv/ichabod/templates/app/compose.yaml` is the starting point.
+- Every application container under `/srv/ichabod/apps/` gets `cpus: "0.50"` and `mem_limit: 512m` unless the card says otherwise and says why. `/srv/ichabod/templates/app/compose.yaml` is the starting point. Those numbers are a blast radius, not a budget — the two static sites on the box peak around 8 MiB, about 1.6% of the memory ceiling — so raise them from a measured peak on the card, never from an estimate.
+- Two categories sit outside that rule and are unbounded today: Traefik under `/srv/ichabod/platform/`, and the per-session OpenClaw sandbox containers. The sandboxes are where build- and browser-heavy work actually runs, so the one-heavy-card-at-a-time rule above is the only ceiling on it. Do not put a limit on either without a card carrying a measured peak.
 - Every automated card gets a timeout and a retry budget when it is written. A card with neither can spin all night.
 - Above 75% disk, stop proposing new work and clear space first: `docker system prune`, old images, and any volume you have a backup of.
 - When Claude quota is exhausted, stop and wait for the reset. Do not switch to metered API usage to keep working — that spends Zach's money to avoid an hour of idleness, and he would rather have the idle hour.
