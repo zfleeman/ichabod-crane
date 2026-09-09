@@ -35,7 +35,7 @@ So the prompts send the written record to the day's journal, which Ichabod owns 
 
 ### The journal is a directory, and this is why
 
-`memory/YYYY-MM-DD/` holds one file per pass or per card — `1624-director.md`, `1628-card-5e0f139c.md`. `memory/YYYY-MM-DD.md` survives as that day's contents page: one line per entry, a couple of KB at most. Keeping the daily `.md` as a real file is deliberate — the bundled memory plugins glob `memory/*.md`, and turning that path into a directory would have been an unforced change to something we do not own.
+`memory/YYYY-MM-DD/` holds one file per pass or per card — `21-1624-director.md`, `22-1628-card-5e0f139c.md`. The leading number is the entry's position in the day, and it is load-bearing: several headings carry no clock time, so without it the directory sorts out of chronological order. That was caught by checksumming the rejoined entries against the original, which is the only reason it did not ship. `memory/YYYY-MM-DD.md` survives as that day's contents page: one line per entry, a couple of KB at most. Keeping the daily `.md` as a real file is deliberate — the bundled memory plugins glob `memory/*.md`, and turning that path into a directory would have been an unforced change to something we do not own.
 
 It used to be one file per day, and `AGENTS.md` said "it is fetched on demand, so length costs nothing until something asks for it." That was wrong twice over. Something asks for it every pass, and an opened file does not cost once — it stays in the session and is re-sent on every turn after it.
 

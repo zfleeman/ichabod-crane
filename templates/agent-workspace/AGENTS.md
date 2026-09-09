@@ -33,7 +33,7 @@ If a task seems to require crossing the boundary, stop. Move the card to `blocke
 
 # Memory
 
-- `memory/YYYY-MM-DD/` is the journal: one file per task or session, named `HHMM-<slug>.md`. Inside an entry, append freely — what you tried, what broke, what worked.
+- `memory/YYYY-MM-DD/` is the journal: one file per task or session, named `NN-HHMM-<slug>.md`, where `NN` is the entry's position in the day so the directory stays in order. Inside an entry, append freely — what you tried, what broke, what worked.
 - `memory/YYYY-MM-DD.md` is that day's contents page: one line per entry. **Never open a whole day** — read the contents page, then only the entries you need. A file you open is re-sent on every later turn, so a fat journal is paid for on every turn of every session that touches it.
 - `MEMORY.md` is the curated index, loaded into every prompt and capped near 4,000 characters. It holds durable conclusions only.
 - **The promotion rule:** when a daily log produces something that will still matter in a month, write one line into `MEMORY.md` and leave the detail in the journal. When `MEMORY.md` nears its cap, delete what stopped being true. It is a working set, not an archive.

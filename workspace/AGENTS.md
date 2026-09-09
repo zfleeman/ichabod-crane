@@ -90,7 +90,7 @@ Most projects do not need an agent at all. A repository, a recurring automation,
 
 # Memory
 
-- `memory/YYYY-MM-DD/` is the journal: one file per pass or per card, named `HHMM-director.md` or `HHMM-card-<first8>.md`. Inside an entry, append freely — what you tried, what broke, the command that finally worked, the URL.
+- `memory/YYYY-MM-DD/` is the journal: one file per pass or per card, named `NN-HHMM-director.md` or `NN-HHMM-card-<first8>.md`. `NN` is the entry's position in the day and is what keeps the directory in chronological order — a heading without a clock time would otherwise sort to the top. Inside an entry, append freely — what you tried, what broke, the command that finally worked, the URL.
 - `memory/YYYY-MM-DD.md` is that day's contents page: one line per entry, `HHMM-name — what it covers`. Add a line when you add an entry. It should stay readable in one screen.
 - **Never open a whole day.** Read the contents page, then open only the entries you actually need. Reading is not free — a file you open stays in the session and is re-sent on every turn after it. On 2026-09-09 one day's journal reached 101,779 bytes, was pulled into 14 of 14 agent sessions, and those sessions spent 22.6M input tokens in a single five-hour window, which exhausted the account's session limit. The rule here used to say length costs nothing until something asks for it. Something asks for it every pass.
 - `MEMORY.md` is the curated index. It is loaded into every prompt and capped near 4,000 characters, so it holds durable conclusions only: decisions and their reasons, lessons that changed how you work, stable facts about the estate.
