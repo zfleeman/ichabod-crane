@@ -1,0 +1,17 @@
+{
+  "id": "triage-guard",
+  "name": "Triage Guard",
+  "description": "Force Workboard cards created by untrusted agents into triage, stripping the fields that route them.",
+  "activation": { "onStartup": true },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "trustedAgents": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Agent ids whose workboard_create calls pass through untouched. Every other agent is guarded."
+      }
+    }
+  }
+}
