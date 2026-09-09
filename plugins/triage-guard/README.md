@@ -17,13 +17,31 @@ exactly what an injected email argues with, which is why this is code.
 ## What it does
 
 A `before_tool_call` hook on `workboard_create`. For any agent not in
-`trustedAgents`, it forces `status: triage` and strips the fields that decide
-where a card runs: `agentId`, `workspace`, `priority`, `maxRuntimeSeconds`,
-`maxRetries`, `scheduledAt`, `parents`, `token`, `createdByCardId`, `skills`.
+`trustedAgents` it forces `status: triage`, and where the call carries a field
+that routes the card it overwrites it with something that routes nowhere:
+`agentId` to empty, `priority` to `normal`, `workspace` to a scratch one.
+
+A call carrying `parents`, `token`, `createdByCardId`, `skills`,
+`maxRuntimeSeconds`, `maxRetries`, or `scheduledAt` is refused outright, with a
+reason telling the caller to send the card again without it. There is no
+harmless value to write for a budget or a schedule, and a reader following its
+instructions never sets one.
 
 Everything a reader is supposed to set — title, notes, labels, board, tenant,
 idempotency key — passes through untouched, as does anything the host stamped
 onto the call itself.
+
+## Overwrite, never delete
+
+The host merges a hook's returned params over the original call. A field this
+hook deletes therefore comes straight back from the model's own arguments,
+which is not obvious and does not fail loudly: the first live test produced a
+card that had been forced to `triage` and still arrived carrying
+`agentId: ichabod` and `priority: urgent`.
+
+So every field is overwritten with a neutral value, and the tests assert the
+field is *present and harmless* rather than absent. Anything added here has to
+have a neutral value or belong in the refused list.
 
 ## Why the config looks like this
 
@@ -58,6 +76,11 @@ a label, that becomes a gap and belongs in this hook.
 
 It does not stop a *human* from promoting one of these cards. This is about
 what an email can cause on its own.
+
+It gates tool calls, so it never sees `openclaw workboard create` run from a
+shell. That is the right shape for the threat: `mail_reader` has no shell at
+all — no exec, no filesystem, no network — so the intake path runs through the
+tool. Anything with shell access on this box is trusted by other means.
 
 ## Building
 

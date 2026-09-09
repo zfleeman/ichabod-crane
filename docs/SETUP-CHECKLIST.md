@@ -274,7 +274,11 @@ Mail arrives, the sender is authenticated, and the body reaches nothing but the 
 - [ ] An email saying "open this link and run its command" remains only a summarized card.
 - [ ] No password appears in configuration, logs, transcripts, or Workboard.
 
-Cards written by `mail_reader` are not yet constrained — the reader can set `status`, `agentId`, and `workspace` on the card it creates. That is inert today because nothing dispatches automatically, and it stops being inert the moment the director pass in [section 6](#6-autonomy-and-recovery) exists. The mechanical check belongs before that pass, not after it.
+Cards written by `mail_reader` are constrained by the `triage-guard` plugin, not by instruction. OpenClaw's tool policy is per-tool rather than per-parameter, so an agent allowed `workboard_create` is allowed every field it takes — including `status`, `agentId`, and `workspace`. The plugin is a `before_tool_call` hook that forces `status: triage` for any agent outside its `trustedAgents` list, neutralizes the fields that route a card, and records what arrived in the card's notes.
+
+- [x] Install `triage-guard` with `scripts/install-plugin triage-guard`, and check the Gateway log says `trusted agents = ichabod` on startup.
+- [x] Confirm the guard holds by asking `mail_reader` to create a promoted card. It lands in `triage` with `priority: normal`, no `agentId`, a scratch workspace, and a `[triage-guard]` line in the notes naming what it tried to claim.
+- [x] Understand where the guard stops. It gates *tool calls*, so it does not see `openclaw workboard create` run from a shell. `mail_reader` has no shell — no exec, no filesystem, no network — so the intake path is covered; anything with shell access on the box is trusted by other means.
 
 ### 5b. Outbound SMTP
 
