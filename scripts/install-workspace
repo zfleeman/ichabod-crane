@@ -18,6 +18,19 @@ for f in AGENTS.md SOUL.md IDENTITY.md; do
   echo "installed $ws/$f"
 done
 
+# Skills Zach owns, one directory each. Only the names shipped in the repo are
+# replaced, so a skill Ichabod wrote for himself is left alone — which is what
+# AGENTS.md promises him under "Who owns which file".
+for d in "$src"/workspace/skills/*/; do
+  [ -d "$d" ] || continue
+  name="$(basename "$d")"
+  rm -rf "$ws/skills/$name"
+  cp -R "$d" "$ws/skills/$name"
+  chown -R openclaw:openclaw "$ws/skills/$name"
+  chmod -R u=rwX,go=rX "$ws/skills/$name"
+  echo "installed $ws/skills/$name"
+done
+
 # The wizard's scaffold is not memory. It is a placeholder with an empty
 # directive and a link to the docs, so the first deploy has to seed straight
 # over it; once a real file is in place this never matches again.
