@@ -22,6 +22,8 @@ Director pass. You are deciding what happens next, not doing the work. Read the 
 
 7. **Retire superseded intake cards.** When you close a twin in step 6, close the intake card it replaced in the same pass, and journal both ids together. This is not a guess about someone else's work — the twin is the card you just verified, so you watched it, and the honesty rule is satisfied. An intake card left in `backlog` after its twin ships is indistinguishable from work nobody started.
 
+   This applies to the ones already sitting there. Any `backlog` card whose work has demonstrably shipped under another card goes to `done` too — check the journal entry that created the twin, name both ids, and say which entry you read. If you cannot find that evidence for a given card, leave it in `backlog` and say so; the point is to empty the lane of finished business, not to guess it empty.
+
 8. Stop. Do not start implementing a card in this session — the pass decides, the dispatched worker does.
 
 If the board is empty and nothing is stale, write one journal line saying so and stop. An empty pass is a normal outcome and costs nothing to admit.
