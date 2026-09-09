@@ -30,7 +30,7 @@ function requirePassword(config: Config): string {
  * which mail enters a session, and this tool only ever acts on messages
  * someone already asked about.
  */
-async function withMailbox<T>(config: Config, fn: (client: ImapFlow) => Promise<T>): Promise<T> {
+async function withMailbox<T>(config: Config, folder: string | undefined, fn: (client: ImapFlow) => Promise<T>): Promise<T> {
   const client = new ImapFlow({
     host: config.host,
     port: config.port,
@@ -40,7 +40,7 @@ async function withMailbox<T>(config: Config, fn: (client: ImapFlow) => Promise<
   });
   await client.connect();
   try {
-    const lock = await client.getMailboxLock(config.mailbox);
+    const lock = await client.getMailboxLock(folder ?? config.mailbox);
     try {
       return await fn(client);
     } finally {
@@ -89,7 +89,7 @@ export default defineToolPlugin({
         "find the message a triage card came from.",
       parameters: SearchParamsSchema,
       execute: async (params: SearchParams, config: Config) =>
-        withMailbox(config, async (client) => {
+        withMailbox(config, params.mailbox, async (client) => {
           const found = await client.search(buildSearchCriteria(params), { uid: true });
           const uids = Array.isArray(found) ? found : [];
           const messages = await fetchHeaders(client, uids, resolveLimit(params.limit, config.maxResults));
@@ -104,7 +104,7 @@ export default defineToolPlugin({
         "flags. Does not return the body — read the triage card for what the message said.",
       parameters: TargetSchema,
       execute: async (params: Target, config: Config) =>
-        withMailbox(config, async (client) => {
+        withMailbox(config, params.mailbox, async (client) => {
           const uid = await resolveUid(client, params);
           const [message] = await fetchHeaders(client, [uid], 1);
           if (!message) throw new Error(`mailbox: no message at uid ${uid}.`);
@@ -117,7 +117,7 @@ export default defineToolPlugin({
       description: "Mark one message as read.",
       parameters: TargetSchema,
       execute: async (params: Target, config: Config) =>
-        withMailbox(config, async (client) => {
+        withMailbox(config, params.mailbox, async (client) => {
           const uid = await resolveUid(client, params);
           const ok = await client.messageFlagsAdd(String(uid), ["\\Seen"], { uid: true });
           return { uid, markedRead: ok };
@@ -129,7 +129,7 @@ export default defineToolPlugin({
       description: "Move one handled message out of the inbox into the archive folder.",
       parameters: TargetSchema,
       execute: async (params: Target, config: Config) =>
-        withMailbox(config, async (client) => {
+        withMailbox(config, params.mailbox, async (client) => {
           const uid = await resolveUid(client, params);
           await client.messageMove(String(uid), config.archiveMailbox, { uid: true });
           return { uid, movedTo: config.archiveMailbox };

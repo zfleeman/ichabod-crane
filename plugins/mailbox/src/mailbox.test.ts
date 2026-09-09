@@ -26,6 +26,14 @@ describe("search criteria", () => {
     expect(() => buildSearchCriteria({})).toThrow(/at least one search term/);
   });
 
+  it("does not treat a folder name as a search term", () => {
+    expect(() => buildSearchCriteria({ mailbox: "Archive" })).toThrow(/at least one search term/);
+  });
+
+  it("keeps the folder out of the criteria it sends to the server", () => {
+    expect(buildSearchCriteria({ mailbox: "Archive", subject: "test" })).toEqual({ subject: "test" });
+  });
+
   it("rejects a malformed date", () => {
     expect(() => parseDate("8 September", "since")).toThrow(/YYYY-MM-DD/);
   });

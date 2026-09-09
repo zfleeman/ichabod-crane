@@ -40,6 +40,18 @@ a far narrower channel than handing over the text, and it needs an actively
 adversarial agent issuing many queries. And it means no snippets or previews,
 ever: a preview is a body in a smaller font.
 
+## Folders, and why UIDs are not identifiers
+
+Every tool takes an optional `mailbox` naming the folder to work in, defaulting
+to the configured inbox. Without it the tool could archive a message and then be
+unable to look at it, and "find that email from last week" would fail for
+exactly the mail most likely to have been filed away.
+
+A UID is only meaningful inside one folder. Archiving a message changes it — the
+same message read as uid 21 in `INBOX` and uid 19 in `Archive` — while its
+`Message-ID` does not move. So `Message-ID` is the identifier to keep; a stored
+UID goes stale the moment anything is filed.
+
 ## What a card can name
 
 The triage card records no `Message-ID` — the IMAP plugin never passes one to
