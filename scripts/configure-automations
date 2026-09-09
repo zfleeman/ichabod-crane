@@ -21,7 +21,11 @@ instance="$(tofu -chdir=tofu output -raw instance_id)"
 
 read -r -d '' remote_script <<'REMOTE' || true
 set -euo pipefail
-oc() { sudo -iu openclaw openclaw "$@"; }
+# Deliberately not `sudo -iu openclaw`, which the other scripts use. The -i
+# login shell re-parses the command line, and these calls pass a whole Markdown
+# prompt as one argument: backticks in it become command substitution and the
+# line structure is flattened. Without -i the argument reaches execve intact.
+oc() { sudo -u openclaw env HOME=/home/openclaw /home/openclaw/.local/bin/openclaw "$@"; }
 A=/srv/ichabod/automations
 
 [ -f "$A/director.md" ] || { echo "no $A/director.md — run scripts/deploy-workspace first" >&2; exit 1; }
@@ -49,20 +53,18 @@ done
 # and the box pays for 24 model sessions a day instead of 288. automations/
 # README.md has the note on making this event-driven later.
 #
-# A job targeting the main session cannot carry --message: the CLI refuses with
-# "Main jobs require --system-event or --script". The pass wants the main
-# session's continuity, so the prompt goes in as a system event instead, and
-# --wake now means it does not sit waiting for a heartbeat that is about to be
-# disabled two blocks down.
+# All three run in isolated sessions. The main session was the obvious home for
+# the director — it is the operating loop — but a main-session job cannot carry
+# --message ("Main jobs require --system-event or --script"), and a job built
+# that way enqueued without ever producing a run. Isolated is the shape that
+# demonstrably runs on this box. Each pass reads the board at the start anyway,
+# so it needs no continuity from the last one.
 oc automations add --name director --display-name "Director pass" \
-  --agent ichabod --session main --every 1h --wake now \
-  --system-event "$(cat "$A/director.md")" \
-  --timeout-seconds 1800 > /dev/null
+  --agent ichabod --session isolated --every 1h \
+  --message "$(cat "$A/director.md")" \
+  --timeout-seconds 1800 --no-deliver > /dev/null
 echo "added director"
 
-# Scout and digest run in isolated sessions. Both are short, self-contained,
-# and read what they need off the board, so neither has any business landing in
-# the middle of whatever the main session is doing.
 oc automations add --name scout --display-name "Scout pass" \
   --agent ichabod --session isolated --cron "0 9 * * *" --tz America/Denver \
   --message "$(cat "$A/scout.md")" \
@@ -81,20 +83,15 @@ echo "added digest"
 # real loop, so the heartbeat is only noise that would hide a real failure in
 # the run history.
 #
-# It cannot be removed with `automations rm`: it is system-owned, and the CLI
-# refuses with "system-owned monitor jobs cannot be edited by cron clients".
-# The job exists because this config key exists, so the key is what goes.
-if oc config get agents.defaults.heartbeat > /dev/null 2>&1; then
-  oc config unset agents.defaults.heartbeat
-  # System-owned jobs are reconciled at startup, so the job outlives the config
-  # change until the Gateway restarts. This restarts ichabod's session too.
-  sudo -iu openclaw systemctl --user restart openclaw-gateway
-  sleep 8
-  sudo -iu openclaw systemctl --user is-active openclaw-gateway
-  echo "heartbeat: config key removed"
-else
-  echo "heartbeat: already absent"
-fi
+# Nothing here removes it, and that is not for want of trying. `automations rm`
+# and `automations disable` both refuse with "system-owned monitor jobs cannot
+# be edited by cron clients". Removing agents.defaults.heartbeat from the config
+# does not help either: the job is persisted in the scheduler's store and
+# survives both the config change and a Gateway restart. The config key is left
+# in place, because a heartbeat with no configured agent is a worse state than
+# one that skips.
+#
+# So the run history has a "skipped" line in it every 30 minutes. Read past it.
 
 oc automations list
 REMOTE
