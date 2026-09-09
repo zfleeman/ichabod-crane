@@ -1,0 +1,10 @@
+{
+  "host": "imap.fastmail.com",
+  "port": 993,
+  "secure": true,
+  "user": "ichabod@ichabod-crane.net",
+  "password": { "source": "store", "provider": "default", "id": "EMAIL_PASSWORD" },
+  "mailbox": "INBOX",
+  "archiveMailbox": "Archive",
+  "maxResults": 25
+}

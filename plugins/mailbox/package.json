@@ -1,0 +1,35 @@
+{
+  "name": "openclaw-plugin-mailbox",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run --config ./vitest.config.ts",
+    "plugin:validate": "npm run build && openclaw plugins validate --entry ./dist/index.js",
+    "plugin:build": "npm run build && openclaw plugins build --entry ./dist/index.js && node -e \"const f='openclaw.plugin.json',fs=require('fs'),m=JSON.parse(fs.readFileSync(f));m.configContracts={secretInputs:{paths:[{path:'password',expected:'string'}]}};fs.writeFileSync(f,JSON.stringify(m,null,2)+'\\n')\""
+  },
+  "files": [
+    "dist",
+    "openclaw.plugin.json",
+    "README.md"
+  ],
+  "dependencies": {
+    "imapflow": "^1.0.0",
+    "typebox": "^1.1.38"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "openclaw": "2026.9.2",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  },
+  "openclaw": {
+    "extensions": [
+      "./dist/index.js"
+    ],
+    "compat": {
+      "pluginApi": ">=2026.5.17"
+    }
+  }
+}

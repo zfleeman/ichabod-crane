@@ -1,0 +1,17 @@
+{
+  "host": "smtp.fastmail.com",
+  "port": 587,
+  "secure": false,
+  "user": "ichabod@ichabod-crane.net",
+  "password": {
+    "source": "store",
+    "provider": "default",
+    "id": "EMAIL_PASSWORD"
+  },
+  "from": "ichabod@ichabod-crane.net",
+  "fromName": "Ichabod Crane",
+  "allowedRecipients": [
+    "zfleeman@gmail.com"
+  ],
+  "maxPerHour": 12
+}

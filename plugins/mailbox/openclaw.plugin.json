@@ -1,0 +1,97 @@
+{
+  "id": "mailbox",
+  "name": "Mailbox",
+  "description": "Search and manage the mailbox the IMAP trigger watches. Never returns message bodies.",
+  "version": "0.1.0",
+  "configSchema": {
+    "type": "object",
+    "required": [
+      "host",
+      "port",
+      "secure",
+      "user",
+      "password",
+      "mailbox",
+      "archiveMailbox",
+      "maxResults"
+    ],
+    "properties": {
+      "host": {
+        "type": "string",
+        "description": "IMAP host."
+      },
+      "port": {
+        "type": "number",
+        "description": "IMAP port. 993 for implicit TLS."
+      },
+      "secure": {
+        "type": "boolean",
+        "description": "True for implicit TLS on 993."
+      },
+      "user": {
+        "type": "string",
+        "description": "IMAP username."
+      },
+      "password": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "object",
+            "required": [
+              "source",
+              "provider",
+              "id"
+            ],
+            "properties": {
+              "source": {
+                "type": "string"
+              },
+              "provider": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "description": "IMAP password. Use a SecretRef; it resolves before the tool runs."
+      },
+      "mailbox": {
+        "type": "string",
+        "description": "Mailbox to search and act on. Usually INBOX."
+      },
+      "archiveMailbox": {
+        "type": "string",
+        "description": "Destination for archived messages."
+      },
+      "maxResults": {
+        "type": "number",
+        "description": "Hard ceiling on messages returned by one search."
+      }
+    }
+  },
+  "activation": {
+    "onStartup": true
+  },
+  "contracts": {
+    "tools": [
+      "mailbox_search",
+      "mailbox_fetch",
+      "mailbox_mark_read",
+      "mailbox_archive"
+    ]
+  },
+  "configContracts": {
+    "secretInputs": {
+      "paths": [
+        {
+          "path": "password",
+          "expected": "string"
+        }
+      ]
+    }
+  }
+}
