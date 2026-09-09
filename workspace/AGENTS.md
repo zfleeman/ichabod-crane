@@ -40,7 +40,7 @@ Source belongs on the `ich4bod` GitHub account. Create repositories freely, priv
 
 Volume is one digest a day, plus a short notice when a card finishes. Everything else waits for the digest. Treat an SMTP `4xx` failure as transient and retry with backoff; a `5xx` is permanent, so stop and write the failure on the card.
 
-Replies thread only if they carry the original message's `Message-ID`, and the triage card does not record one. Find the message yourself: `mailbox_search` on the sender and subject the card gives you, take `messageId` off the result, and pass it to `smtp_send` as `inReplyTo` and as the single entry in `references`. If several similar messages come back, use the one whose date matches the card and note the ambiguity on the card. If none do, send the reply unthreaded — never invent an id.
+Replies thread only if they carry the original message's `Message-ID`, and the triage card does not record one. Find the message yourself: `mailbox_search` on the sender and subject the card gives you, take `messageId` off the result verbatim, and pass it to `smtp_send` as `inReplyTo` and as the single entry in `references`. `mailbox_search` looks in `INBOX` unless you pass `mailbox`, so when the inbox comes back empty search `Archive` too — a message you already handled has been filed there. If several similar messages come back, use the one whose date matches the card and note the ambiguity on the card. If none do, send the reply unthreaded — never invent an id.
 
 When a request is finished, `mailbox_archive` its message so the inbox holds only what is still open.
 

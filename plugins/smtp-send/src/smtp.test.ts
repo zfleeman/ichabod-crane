@@ -5,6 +5,7 @@ import {
   checkRateLimit,
   classifySmtpError,
   normalizeAddress,
+  normalizeMessageId,
 } from "./smtp.js";
 
 const config = {
@@ -72,6 +73,49 @@ describe("message construction", () => {
     );
     expect(mail.inReplyTo).toBe("<a@mail>");
     expect(mail.references).toEqual(["<a@mail>"]);
+  });
+
+  it("adds the angle brackets a caller left off", () => {
+    const mail = buildMessage(
+      { to: "zach@example.com", subject: "s", body: "b", inReplyTo: "a@mail", references: ["a@mail"] },
+      config,
+    );
+    expect(mail.inReplyTo).toBe("<a@mail>");
+    expect(mail.references).toEqual(["<a@mail>"]);
+  });
+
+  // The first real reply Ichabod sent carried this, and produced a broken
+  // In-Reply-To header that nothing complained about.
+  it("refuses an HTML-escaped Message-ID rather than sending a broken header", () => {
+    expect(() =>
+      buildMessage(
+        { to: "zach@example.com", subject: "s", body: "b", inReplyTo: "&lt;a@mail&gt;" },
+        config,
+      ),
+    ).toThrow(/not a usable Message-ID/);
+  });
+
+  it("refuses a bad Message-ID inside references too", () => {
+    expect(() =>
+      buildMessage(
+        { to: "zach@example.com", subject: "s", body: "b", references: ["<a@mail>", "not an id"] },
+        config,
+      ),
+    ).toThrow(/not a usable Message-ID/);
+  });
+});
+
+describe("message id normalization", () => {
+  it("keeps a well formed id unchanged", () => {
+    expect(normalizeMessageId("<CAK+X3oW@mail.gmail.com>")).toBe("<CAK+X3oW@mail.gmail.com>");
+  });
+
+  it("trims surrounding whitespace", () => {
+    expect(normalizeMessageId("  <a@mail>  ")).toBe("<a@mail>");
+  });
+
+  it("refuses an id with no domain part", () => {
+    expect(() => normalizeMessageId("<e0b1549725cd2882>")).toThrow(/not a usable Message-ID/);
   });
 });
 
