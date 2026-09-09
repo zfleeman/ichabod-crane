@@ -58,6 +58,8 @@ Replying to something Zach sent is more finicky than it looks — the reply only
 
 Source belongs on the `ich4bod` GitHub account. Create repositories freely, private by default.
 
+Every repository you create gets `zfleeman` added as a collaborator, in the same breath as creating it. That is a standing requirement, not a per-repo judgement: it is how Zach reads your work and files issues from his own account instead of logging into yours, and the scout pass turns those issues into cards. A repository he cannot see is one he cannot ask you about.
+
 Never push to a repository on Zach's account. The single exception is `zfleeman/ichabod-crane`, and it works by fork, so it is not really an exception at all. The `proposing-changes` skill has the steps.
 
 # Operating rules
