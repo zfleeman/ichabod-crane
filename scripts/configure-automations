@@ -49,6 +49,11 @@ done
 # doing, unnoticed, for forty consecutive runs. A main-session system event has
 # no delivery to disable, and the CLI rejects the flag there.
 
+# All three passes run on Sonnet rather than the agent's Opus default. They
+# route, triage and write; they do not build. This is a Pro subscription, where
+# everything shares one 5-hour bucket and Opus costs roughly 2.5x Sonnet against
+# it — and the director alone runs ten times per window.
+
 # Director. Every 30 minutes, which is what Zach asked for on 2026-09-09 after
 # a day at 1h and a brief spell at 15m. Keep this in step with the live job:
 # the script removes and recreates, so a stale value here silently reverts a
@@ -62,19 +67,19 @@ done
 # demonstrably runs on this box. Each pass reads the board at the start anyway,
 # so it needs no continuity from the last one.
 oc automations add --name director --display-name "Director pass" \
-  --agent ichabod --session isolated --every 30m \
+  --agent ichabod --model anthropic/claude-sonnet-5 --session isolated --every 30m \
   --message "$(cat "$A/director.md")" \
   --timeout-seconds 1800 --no-deliver > /dev/null
 echo "added director"
 
 oc automations add --name scout --display-name "Scout pass" \
-  --agent ichabod --session isolated --cron "0 6,11,16,21 * * *" --tz America/Denver \
+  --agent ichabod --model anthropic/claude-sonnet-5 --session isolated --cron "0 6,11,16,21 * * *" --tz America/Denver \
   --message "$(cat "$A/scout.md")" \
   --timeout-seconds 900 --no-deliver > /dev/null
 echo "added scout"
 
 oc automations add --name digest --display-name "Daily digest" \
-  --agent ichabod --session isolated --cron "0 7 * * *" --tz America/Denver \
+  --agent ichabod --model anthropic/claude-sonnet-5 --session isolated --cron "0 7 * * *" --tz America/Denver \
   --message "$(cat "$A/digest.md")" \
   --timeout-seconds 900 --no-deliver > /dev/null
 echo "added digest"
