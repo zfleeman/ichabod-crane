@@ -1138,7 +1138,7 @@ Because the IMAP plugin cannot send, this is the one piece of plumbing to build 
   port: 587,
   secure: false,          // STARTTLS upgrade on 587
   user: "ichabod@ichabod-crane.net",
-  password: { source: "store", provider: "default", id: "SMTP_PASSWORD" }
+  password: { source: "store", provider: "default", id: "EMAIL_PASSWORD" }
 }
 ```
 
@@ -1164,7 +1164,7 @@ Begin with Zach as the only permitted recipient — an allowlist in the tool its
 
 The plugin never touches the mailbox. It does not move messages, does not set flags, and does not backfill mail that arrived before watching began. That is the correct shape for an intake trigger, but it leaves the mailbox itself unmanaged: nothing archives a handled request, nothing marks anything read, and nothing can answer "what did Zach send last Tuesday."
 
-That gap is worth a second small tool — a typed OpenClaw tool over Python's `imaplib`, with four operations: archive a message, mark one read, search history, and fetch one message by `Message-ID`. Search carries more weight here than it first appears: it is not only for "find that email from last week", it is the only way to get from a triage card back to the message it came from, because the card records a sender and a subject and nothing more precise.
+That gap is worth a second small tool — a typed OpenClaw tool plugin, with four operations: archive a message, mark one read, search history, and fetch one message by `Message-ID`. Search carries more weight here than it first appears: it is not only for "find that email from last week", it is the only way to get from a triage card back to the message it came from, because the card records a sender and a subject and nothing more precise.
 
 Two rules keep it from undoing the intake membrane:
 

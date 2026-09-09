@@ -42,7 +42,7 @@ export const ParamsSchema = Type.Object({
   subject: Type.String({ description: "Subject line." }),
   body: Type.String({ description: "Plain text body." }),
   inReplyTo: Type.Optional(
-    Type.String({ description: "Message-ID of the message being replied to, angle brackets included." }),
+    Type.String({ description: "Message-ID of the message being replied to, exactly as a mailbox search returned it." }),
   ),
   references: Type.Optional(
     Type.Array(Type.String(), { description: "Message-IDs of the thread so far, oldest first." }),
@@ -73,6 +73,24 @@ export function assertAllowedRecipient(to: string, allowed: readonly string[]): 
 }
 
 /**
+ * A Message-ID reaches the header as `<id@domain>` or it does not thread at
+ * all. The caller reads one off a mailbox search result, and the first real
+ * reply arrived with the brackets HTML-escaped as `&lt;...&gt;` — a header
+ * that is silently wrong rather than an error. Add the brackets when they are
+ * missing, and refuse anything else.
+ */
+export function normalizeMessageId(id: string): string {
+  const inner = id.trim().replace(/^<|>$/g, "").trim();
+  if (!/^[^<>\s]+@[^<>\s]+$/.test(inner) || /&(lt|gt|amp);/.test(inner)) {
+    throw new Error(
+      `smtp_send: "${id}" is not a usable Message-ID. Pass it exactly as the mailbox search ` +
+        `returned it, in the form <id@domain>. Nothing was sent.`,
+    );
+  }
+  return `<${inner}>`;
+}
+
+/**
  * The envelope sender and the header From address are both config.from. A
  * mismatch between them is what breaks DMARC alignment, so neither is
  * caller-supplied. fromName only ever decorates the header.
@@ -87,8 +105,8 @@ export function buildMessage(params: Params, config: Config) {
     to: normalizeAddress(params.to),
     subject: params.subject,
     text: params.body,
-    ...(params.inReplyTo ? { inReplyTo: params.inReplyTo } : {}),
-    ...(params.references?.length ? { references: params.references } : {}),
+    ...(params.inReplyTo ? { inReplyTo: normalizeMessageId(params.inReplyTo) } : {}),
+    ...(params.references?.length ? { references: params.references.map(normalizeMessageId) } : {}),
   };
 }
 

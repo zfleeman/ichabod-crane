@@ -28,8 +28,17 @@ everything that affects deliverability or safety comes from config.
 ## Threading
 
 `inReplyTo` and `references` are optional parameters, and the caller has to
-find the original's `Message-ID` itself. Nothing on a triage card contains one
-— see issue #37. Until the mailbox tool exists, replies will not thread.
+find the original's `Message-ID` itself, because nothing on a triage card
+contains one. The route is `mailbox_search` from the `mailbox` plugin: search
+for the sender and subject the card records, take `messageId` off the result,
+and pass it here as `inReplyTo` and as the single entry in `references`. That
+instruction lives in Ichabod's `AGENTS.md`; this tool only carries whatever it
+is handed, and omits both headers when it is handed nothing.
+
+What it will not do is send a `Message-ID` that cannot thread. A value
+missing its angle brackets gets them; anything else — HTML-escaped
+brackets, an id with no domain — is refused before the SMTP connection is
+opened, because a malformed threading header is a failure nothing reports.
 
 ## Building
 
