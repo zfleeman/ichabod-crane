@@ -4,7 +4,7 @@ The three recurring passes. The files here are the source of truth: `scripts/dep
 
 | File | Job | Schedule | Model |
 |---|---|---|---|
-| `director.md` | Reads the board, triages, dispatches one card, recovers stale claims, retires superseded intake cards | Every 30 minutes | Sonnet 5 |
+| `director.md` | Reads the board, triages, dispatches one card, recovers stale claims, retires superseded intake cards | Hourly | Sonnet 5 |
 | `scout.md` | Proposes at most one `wild-work` card | 06:00, 11:00, 16:00, 21:00 America/Denver | Sonnet 5 |
 | `digest.md` | One email to Zach, or silence | Daily, 07:00 America/Denver | Sonnet 5 |
 
@@ -14,17 +14,19 @@ The passes run on Sonnet, not the agent's Opus default, because they route and w
 
 This is a Claude **Pro** subscription: one shared five-hour bucket, no separate Opus bar. Measured on 2026-09-09, that bucket is roughly 25M input+cache tokens — 5.8M of it read as 21% used.
 
-Against that, the director's cadence is the dominant line item. Ten passes per window at Opus prices came to about 15M, over half the budget, before a single worker ran. Opus costs roughly 2.5x Sonnet at list rates, so moving the passes to Sonnet takes that to about 6M and leaves real headroom for the work.
+Against that, the director's cadence is the dominant line item. Ten passes per window — the 30-minute cadence run until 2026-09-10 — came to about 15M at Opus prices, over half the budget, before a single worker ran. Opus costs roughly 2.5x Sonnet at list rates, so moving the passes to Sonnet takes that to about 6M and leaves real headroom for the work.
 
 The rule of thumb: a pass that routes, triages and writes runs on Sonnet; a dispatched worker that builds something gets Opus. Haiku was considered for the director and rejected for now — step 3 is an injection call on attacker-controlled email text, and step 7 retires cards on documentary evidence. Both are judgment, and both fail destructively.
 
 ## What the director's cadence actually costs
 
-The IMAP watcher is event-driven — `watch: {mode: "auto", pollSeconds: 60}` — so an email becomes a triage card within about a minute of arriving. But nothing dispatches a card on its own, so the director's schedule *is* how long a request waits. At 30 minutes a card can sit for half an hour next to a reader that produced it in one minute. That is the deliberate trade: 48 model sessions a day instead of 288, most of which would find an empty board.
+The IMAP watcher is event-driven — `watch: {mode: "auto", pollSeconds: 60}` — so an email becomes a triage card within about a minute of arriving. But nothing dispatches a card on its own, so the director's schedule *is* how long a request waits. Hourly means a card can sit for an hour next to a reader that produced it in one minute. That is the deliberate trade: 24 model sessions a day instead of 288, most of which would find an empty board.
+
+**Why hourly and not 30 minutes.** A pass costs about 47,700 tokens before it does anything, and that preamble is re-sent on every turn of the pass — so the bill scales with how often the pass runs, not with what it finds. An empty pass is not a cheap pass. On 2026-09-10 the account hit its five-hour session limit with the director at 30 minutes, for the second time in two days. Halving the cadence halves that fixed cost directly, and it is the only lever available today that needs no experiment: narrowing the tool surface is worth more but is not yet safe, and everything in `memory/` put together is under 3% of a pass.
 
 These schedules drift, because Zach changes them by email and a worker card applies the change to the live scheduler. `configure-automations` removes and recreates every job, so a value left stale in that script silently reverts a change someone asked for. When you edit a schedule on the box, edit the script in the same commit.
 
-If that half-hour ever feels long, the fix is a condition script rather than a tighter schedule — see below.
+If that hour ever feels long, the fix is a condition script rather than a tighter schedule — see below. A tighter schedule buys latency by spending quota on empty passes; a condition script only wakes the model when there is something to decide.
 
 ## The condition script, and why it is not here yet
 

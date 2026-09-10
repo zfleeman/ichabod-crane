@@ -52,10 +52,13 @@ done
 # All three passes run on Sonnet rather than the agent's Opus default. They
 # route, triage and write; they do not build. This is a Pro subscription, where
 # everything shares one 5-hour bucket and Opus costs roughly 2.5x Sonnet against
-# it — and the director alone runs ten times per window.
+# it — and the director alone runs five times per window.
 
-# Director. Every 30 minutes, which is what Zach asked for on 2026-09-09 after
-# a day at 1h and a brief spell at 15m. Keep this in step with the live job:
+# Director. Hourly, set on 2026-09-10 after the account hit its session limit
+# twice in two days. The history: 1h, briefly 15m, 30m from 2026-09-09, back to
+# 1h now. Halving the cadence halves the fixed per-pass cost, which is where the
+# quota actually goes — ~47,700 tokens of preamble re-sent every turn, against
+# ~1,650 tokens of memory reads. Keep this in step with the live job:
 # the script removes and recreates, so a stale value here silently reverts a
 # schedule change made on the box. automations/README.md has the note on making
 # this event-driven later.
@@ -67,7 +70,7 @@ done
 # demonstrably runs on this box. Each pass reads the board at the start anyway,
 # so it needs no continuity from the last one.
 oc automations add --name director --display-name "Director pass" \
-  --agent ichabod --model anthropic/claude-sonnet-5 --session isolated --every 30m \
+  --agent ichabod --model anthropic/claude-sonnet-5 --session isolated --every 1h \
   --message "$(cat "$A/director.md")" \
   --timeout-seconds 1800 --no-deliver > /dev/null
 echo "added director"

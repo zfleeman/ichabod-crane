@@ -1229,7 +1229,7 @@ Start with three automations:
 
 ### Director pass
 
-Run every 15–30 minutes while the experiment is active:
+Runs hourly. It started at 15–30 minutes, which proved too expensive — a pass costs ~47,700 tokens before it does anything, so cadence, not content, is what spends the quota:
 
 - Review triage, ready, running, review, and blocked cards.
 - Clarify and decompose new Zach requests.
