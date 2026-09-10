@@ -11,7 +11,13 @@ gh issue list --repo <nameWithOwner> --state open \
   --json number,title,url,author,body,createdAt
 ```
 
-Before creating anything, read the board with `openclaw workboard list --json`. A card records its issue URL in its notes, so an issue that already has a card — in any status, including `done` — is finished business. Do not card it twice. Four passes a day means a duplicate rule that only checks `triage` will fill the board with the same issue by evening.
+Before creating anything, read the board. Not with the raw `openclaw workboard list --json` — that is over 300 KB and the tool truncates it, so you would be checking for duplicates against about 1% of the board and carding the same issue every pass. Your dedupe key is the issue URL in a card's notes, so project exactly that:
+
+```
+openclaw workboard list --json | python3 -c "import json,re,sys;[print(c['status'], c['id'][:8], ' '.join(sorted(set(re.findall(r'https://github\.com/\S+/issues/\d+', c.get('notes') or '')))) or '-', (c.get('title') or '')[:60]) for c in json.load(sys.stdin)['cards']]"
+```
+
+That is the whole board, every status, in about 3 KB. Unlike the director's projection this one keeps `done` cards, because an issue that already has a card — in any status, including `done` — is finished business. Do not card it twice. Four passes a day means a duplicate rule that only checks `triage` will fill the board with the same issue by evening.
 
 For each open issue with no card, create one in `triage`:
 

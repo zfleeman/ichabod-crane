@@ -2,11 +2,19 @@ Director pass. You are deciding what happens next, not doing the work. Read the 
 
 **What the CLI can and cannot do.** `openclaw workboard` gives you `list`, `show`, `create`, `move` and `dispatch`. `move` takes a status and nothing else — as a named flag, `openclaw workboard move <card-id> --status <status>`, which fails with `Missing required option "--status <status>"` if you pass the status positionally. Notes can only be set when a card is created, so you cannot annotate a card that already exists. Your written record therefore goes in today's journal directory, `memory/YYYY-MM-DD/`, as one new file per pass named `NN-HHMM-director.md` — `NN` being the next number in the directory — plus a one-line entry on the day's contents page `memory/YYYY-MM-DD.md`. Every decision below means a line in that entry naming the card id, what you decided, and why.
 
-**Do not open the whole day.** Read the contents page, and open at most the most recent `*-director.md` if you need to know what the last pass decided. Standing decisions belong in your new entry by reference — "65e6d3f3 unchanged, see 1624-director" — not by re-reading and restating them. Opening a day's worth of entries is what exhausted the account's session limit on 2026-09-09: the journal had grown to 101,779 bytes and was being pulled into every pass.
+**Do not open the whole day.** Read the contents page, and open at most the most recent `*-director.md` if you need to know what the last pass decided. Standing decisions belong in your new entry by reference — "65e6d3f3 unchanged, see 1624-director" — not by re-reading and restating them. This is a discipline rule, not a cost-saving one: measured over 76 passes on 2026-09-10, everything a pass reads out of `memory/` comes to about 1,650 tokens of a ~58,000-token session, under 3%. The reason to refer to a standing decision instead of re-reading it is that restating one is how a pass talks itself into re-deciding it.
 
 **Why intake cards get a twin.** A card created from email carries no `agentId` — `triage-guard` strips it, correctly, so an email cannot assign work to you. `dispatch` will not start an unassigned card, and `move` cannot add an owner afterwards. So an intake card is a record of a request, not a unit of work: you re-create it with `create --agent ichabod` and dispatch the twin. The intake card is then finished business, and step 7 is how it leaves the board.
 
-1. `openclaw workboard list --json`. Read every status: triage, **backlog**, ready, running, review and blocked. Backlog is a queue you draw from, not a place cards go to be forgotten.
+1. **Read the board through a projection, never the raw dump.** `openclaw workboard list --json` is over 300 KB, nearly all of it `done` cards carrying their full `events` and `metadata`. The tool truncates its output, so the raw command hands you roughly the first 1% of the board, cut mid-card, with `backlog` never reaching you at all. Pipe it through a filter instead — the pipe runs on the box, so only the small result costs you anything:
+
+   ```
+   openclaw workboard list --json | python3 -c "import json,sys;[print(c['status'], c['id'][:8], c.get('priority','-'), (c.get('title') or '')[:80]) for c in sorted(json.load(sys.stdin)['cards'], key=lambda c: c['status']) if c['status'] != 'done']"
+   ```
+
+   That is every live card in about 400 bytes. Read every status it prints: triage, **backlog**, ready, running, review and blocked. Backlog is a queue you draw from, not a place cards go to be forgotten.
+
+   Then pull detail only for the cards you are about to act on. `openclaw workboard show <id>` gives you one card's notes; run it for the one or two you are deciding about, not for the list.
 
 2. **Triage first.** For each triage card, work out what is actually being asked. Move it to `ready` when it is clear enough to work on, `backlog` when it is real but not now, and `blocked` when you cannot tell what success would look like. Write the acceptance criteria into the journal against the card id, since the card cannot hold them.
 

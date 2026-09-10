@@ -652,7 +652,9 @@ Keep credentials, tokens, and anything Zach would not want quoted back in an ema
 
 Two different jobs, and mixing them is the usual failure:
 
-- `memory/YYYY-MM-DD/` is the **journal**, one file per pass or card (`NN-HHMM-director.md`, `NN-HHMM-card-<first8>.md`, `NN` being position in the day), with `memory/YYYY-MM-DD.md` as that day's contents page. Append freely inside an entry, but **never open a whole day**: an opened file stays in the session and is re-sent on every later turn. This is not theoretical — on 2026-09-09 a single day's journal reached 101,779 bytes, was pulled into 14 of 14 agent sessions, and those sessions spent 22.6M input tokens in one five-hour window, exhausting the account's session limit. The rule used to say length costs nothing until something asks for it; something asks for it every pass.
+- `memory/YYYY-MM-DD/` is the **journal**, one file per pass or card (`NN-HHMM-director.md`, `NN-HHMM-card-<first8>.md`, `NN` being position in the day), with `memory/YYYY-MM-DD.md` as that day's contents page. Append freely inside an entry, but **never open a whole day**: an opened file stays in the session and is re-sent on every later turn. The rule used to say length costs nothing until something asks for it; something asks for it every pass.
+
+  **The journal is not what fills a context window.** This guide used to blame the 2026-09-09 session-limit exhaustion on journal size. That was wrong, and it sent the next investigation to the wrong file. Measured on 2026-09-10 over 76 director passes: a pass carries **47,721 tokens before it does anything**, peaks around 58,000, and reads about 6,600 bytes of `memory/` — roughly **1,650 tokens, 2.8%**. A controlled A/B on two identical cron probes put **~32,000 tokens of a pass in the tool schemas** (`--tools "*"` → 42,278; `--tools "exec,read,write,edit"` → 10,161); a bare `claude -p` in the same workspace is 19,312. Keep the journal lean because a contents page nobody can read in one screen stops being useful. When a pass runs out of window or the account runs out of quota, measure the preamble first — the per-turn `usage` blocks in `~/.claude/projects/<workspace>/*.jsonl` are real numbers, and the working set is generally a tenth of the fixed cost.
 - `MEMORY.md` is the **curated index**. It is loaded into every prompt and capped around 4,000 characters, so it holds only durable conclusions: decisions and their reasons, lessons that changed behavior, stable facts about the estate.
 
 The promotion rule belongs in `AGENTS.md`: when a daily log produces something that will still matter in a month, write one line into `MEMORY.md` and leave the detail in the journal. When `MEMORY.md` approaches its cap, delete the entries that stopped being true — it is a working set, not an archive.
@@ -801,6 +803,8 @@ The mechanics are small, because Workboard already exposes read-only access:
 openclaw workboard list --json                 # CLI, reads local plugin state
 ```
 
+That dump is over 300 KB on a board with 45 cards, because every `done` card carries its full `events` log and `metadata`. It is fine as an exporter's input and unusable as an agent's input — any tool-based read truncates it, silently, mid-card. Every automated reader in `automations/` projects it down to the few fields it needs before looking at it.
+
 The Gateway also serves `workboard.cards.list`, `workboard.cards.export`, and `workboard.cards.stats` over RPC under the `operator.read` scope — read-only by construction, so the exporter cannot move a card even if it is compromised.
 
 So: one recurring automation runs the export, renders static HTML, and writes it into a directory served by a tiny nginx container with a Traefik label for `board.ichabod-crane.net`. No database, no second app, no inbound path to the Gateway.
@@ -841,7 +845,7 @@ Every executable card should contain:
 
 For the `t3a.large` pilot, keep only one build/browser-heavy card running at a time even though Workboard can dispatch more. Increase concurrency only after observing memory, swap, CPU credits, and disk behavior.
 
-The UI is the easier way to learn the board. `openclaw workboard list` and `dispatch` are primarily useful while troubleshooting from an SSM session.
+The UI is the easier way to learn the board. `openclaw workboard list` and `dispatch` are primarily useful while troubleshooting from an SSM session — and pipe `list --json` through a projection rather than reading it whole, for the reason above.
 
 # 10. Direct Docker deployment with Traefik
 
