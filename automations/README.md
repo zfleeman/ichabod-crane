@@ -60,7 +60,20 @@ Measured on 2026-09-09, in the five-hour window 14:10–19:09 UTC:
 | Output tokens | 241,716 |
 | Result | account session limit 100% consumed |
 
-The 15:00 hour alone burned 12.7M tokens — that was the hour the director briefly ran every 15 minutes, so four passes an hour each dragged the whole day's journal along. Cadence multiplies the journal; the journal is what makes cadence expensive.
+The 15:00 hour alone burned 12.7M tokens — that was the hour the director briefly ran every 15 minutes.
+
+**The conclusion originally drawn from this table was wrong, and it is worth saying why.** This section used to end "cadence multiplies the journal; the journal is what makes cadence expensive," and that sentence propagated into `AGENTS.md`, `director.md` and `digest.md`, so the next investigation into context pressure started at the journal and found nothing. Measured on 2026-09-10 across 76 director passes:
+
+| | tokens |
+|---|---|
+| Fixed preamble, before a pass does anything (median) | **47,721** |
+| Peak context reached (median) | 58,078 |
+| Work a pass adds to its own baseline (median) | ~10,400 |
+| Everything the pass reads out of `memory/` | ~1,650 (**2.8%**) |
+
+Cumulative input across those 76 sessions was 62.5M tokens, of which the 47.7k baseline re-sent every turn accounts for ~40M and journal reads ~1.4M. A controlled A/B on two identical throwaway cron probes located the baseline: `--tools "*"` costs 42,278 tokens and `--tools "exec,read,write,edit"` costs 10,161, so **~32,000 tokens of every pass is tool schemas**. For scale, a bare `claude -p` in this workspace is 19,312.
+
+So cadence is still the lever — 48 passes a day at ~48k fixed each is the bill — but it multiplies the *preamble*, not the journal. Narrowing `--tools` is the order-of-magnitude fix and is **not yet safe**: it strips the claude-cli harness's native Bash/Read/Write/Edit and substitutes OpenClaw's own `exec`, which backgrounds long commands and returns "still running, pid N". A live director pass on the narrowed list dropped to an 11,983 baseline and then spent 14 turns in a sleep-and-poll loop without reaching a routing decision. It needs either a tool-name list that keeps the native harness tools or a director prompt written against the async `exec` contract. Full working in `memory/2026-09-10/36-1615-card-27de693e.md`.
 
 **The rule that follows: never open a whole day.** Read the contents page, open only the entries you need, and refer to a standing decision by its entry name rather than re-reading and restating it.
 
@@ -95,4 +108,5 @@ The alternative fix, if that one does not pan out, is a per-board default owner.
 - **A main-session job cannot carry `--message`** — the CLI insists on `--system-event` or `--script` — and it rejects `--no-deliver` too. A director built that way enqueued and then never produced a run, so all three passes are isolated sessions instead. Each one reads the board first, so none of them needs continuity from the last.
 - **Pass prompts through `sudo -u`, never `sudo -iu`.** The `-i` login shell re-parses the command line, so a Markdown prompt handed over as one argument has its backticks executed on the box and its blank lines flattened. That is not hypothetical: it ran `openclaw workboard dispatch` and baked the entire board into a job's message.
 - **`dispatch` needs `--admin` for any card the CLI created.** CLI-created cards default to restricted workspace access, and a restricted card refuses to start on `ichabod`, which is not sandboxed: `target agent is not sandboxed for this restricted Workboard card`. Pair it with `--max-starts 1` — plain `dispatch` promotes every `ready` card at once and defaults to three.
+- **A pass's prompt lives in two places, and they drift.** `configure-automations` bakes the file into the scheduler job with `--message`, so the job holds a *copy*. Editing the live job takes effect immediately and is silently reverted the next time anyone runs the script; editing the file here changes nothing until someone deploys. On 2026-09-10 the director's board projection and the digest's corrected journal-size bullet existed only inside the jobs for several hours — one `configure-automations` run would have erased both with no diff and no error. Check with `openclaw automations get <id> --json` and compare `payload.message` against the file. Fix the file, commit, then deploy.
 - **The stock heartbeat cannot be turned off.** `automations rm` and `disable` both refuse ("system-owned monitor jobs cannot be edited by cron clients"), and removing `agents.defaults.heartbeat` from the config does not remove the job either — it is persisted in the scheduler's store and survives a Gateway restart. Expect a `skipped` line in the history every 30 minutes and read past it.
