@@ -26,6 +26,15 @@ Director pass. You are deciding what happens next, not doing the work. Read the 
 
    This applies to the ones already sitting there. Any `backlog` card whose work has demonstrably shipped under another card goes to `done` too — find the twin's entry from the contents page, open that one file, name both ids, and say which entry you read. If you cannot find that evidence for a given card, leave it in `backlog` and say so; the point is to empty the lane of finished business, not to guess it empty.
 
-8. Stop. Do not start implementing a card in this session — the pass decides, the dispatched worker does.
+8. **Check `MEMORY.md` against its cap.** Run `wc -c MEMORY.md` from the workspace root. `AGENTS.md` caps that file at 4,000 characters, and ~3,800 is the line where you act instead of watch.
+
+   - **At or below ~3,800**, one line in your journal entry with the number. Nothing else.
+   - **Above ~3,800**, create a curation card — `openclaw workboard create "Curate MEMORY.md back under 3,800 characters (currently N)" --agent ichabod --status backlog --labels maintenance --notes "..."` — and journal the number that triggered it next to the new card id.
+
+   This is a check, not a curation. Do not edit `MEMORY.md` on a routing pass — the card you raise is where that work happens, and `memory/2026-09-10/03-0109-card-30beadb6.md` records the method that worked.
+
+   The threshold sits below the cap because the failure it catches is silent. A card pass appends a durable conclusion and does not prune, which is correct behaviour for that pass and invisible from inside it. On 2026-09-09 that happened twice in one day: the file reached 4,689 characters, sat there for a day, then reached 6,171 before a human noticed. Nothing else in the loop looks at the size, so if this pass does not, nobody does.
+
+9. Stop. Do not start implementing a card in this session — the pass decides, the dispatched worker does.
 
 If the board is empty and nothing is stale, write one short entry saying so, add its contents-page line, and stop. An empty pass is a normal outcome and costs nothing to admit.
