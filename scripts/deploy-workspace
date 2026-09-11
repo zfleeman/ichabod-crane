@@ -20,7 +20,7 @@ cd "$(dirname "$0")/.."
 instance="$(tofu -chdir=tofu output -raw instance_id)"
 # macOS tar writes AppleDouble ._ files and xattr headers into the archive,
 # which then land in the template and get copied into every new workspace.
-payload="$(COPYFILE_DISABLE=1 tar --no-xattrs -czf - workspace workspace-mail-reader templates automations scripts | base64 | tr -d '\n')"
+payload="$(COPYFILE_DISABLE=1 tar --no-xattrs -czf - workspace workspace-mail-reader templates automations scripts claude | base64 | tr -d '\n')"
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
