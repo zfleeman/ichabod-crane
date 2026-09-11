@@ -58,6 +58,29 @@ oc config set 'agents.defaults.models["anthropic/claude-haiku-4-5-20251001"]' \
 oc config set agents.entries.ichabod.model \
   '{"primary":"anthropic/claude-opus-5","fallbacks":["anthropic/claude-sonnet-5","anthropic/claude-haiku-4-5-20251001"]}' --strict-json
 
+# ichabod's tool surface. This is a preamble cost, not a security control.
+# A tool's schema is sent on every turn whether or not anything ever calls it,
+# and OpenClaw applies `deny` when it builds the tool set — so a denied tool is
+# never bridged into the MCP surface and costs nothing. Every name below is a
+# tool no session on this box has ever called, read out of the Claude CLI
+# transcripts rather than guessed.
+#
+# Measured 2026-09-11 on a director pass: preamble 54,711 -> 38,831 tokens,
+# 43 tools -> 20, and all six native Claude CLI tools survived. That last part
+# is the one to re-check after an OpenClaw upgrade: a per-agent deny is applied
+# at tool construction, but a *run-level* tool cap takes a different path that
+# hard-codes `native: []` and would strip Bash/Read/Write/Edit entirely.
+#
+# `skill_workshop` is deliberately NOT denied, despite being the largest single
+# entry at 8,824 characters and never having been called. AGENTS.md lets
+# Ichabod write his own skills, and that is the tool he would need to do it.
+#
+# Deny-only: no profile and no `allow`, so this narrows the default surface
+# instead of replacing it. One object rather than a nested path, for the same
+# reason as mail_reader below — setting `.tools` wholesale replaces the subtree.
+oc config set agents.entries.ichabod.tools \
+  '{"deny":["agents_list","agents_wait","canvas","create_goal","dashboard","dir_fetch","dir_list","file_fetch","file_write","get_goal","message","node_inference","secrets","session_status","sessions_search","sessions_spawn","sessions_yield","subagents","tts","update_goal","web_fetch","web_search"]}' --strict-json
+
 # mail_reader: registered only if it is not already in the roster. `agents add`
 # fails on an existing id, and this script has to be safe to rerun.
 if ! oc agents list 2>/dev/null | grep -q mail_reader; then
