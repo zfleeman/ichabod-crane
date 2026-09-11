@@ -17,7 +17,7 @@ Before creating anything, read the board. Not with the raw `openclaw workboard l
 openclaw workboard list --json | python3 -c "import json,re,sys;[print(c['status'], c['id'][:8], ' '.join(sorted(set(re.findall(r'https://github\.com/\S+/issues/\d+', c.get('notes') or '')))) or '-', (c.get('title') or '')[:60]) for c in json.load(sys.stdin)['cards']]"
 ```
 
-That is the whole board, every status, in about 3 KB. Unlike the director's projection this one keeps `done` cards, because an issue that already has a card — in any status, including `done` — is finished business. Do not card it twice. Four passes a day means a duplicate rule that only checks `triage` will fill the board with the same issue by evening.
+That is the whole board, every status, in about 3 KB. Unlike the director's projection this one keeps `done` cards, because an issue that already has a card — in any status, including `done` — is finished business. Do not card it twice. You run several times a day, so a duplicate rule that only checks `triage` will fill the board with the same issue by evening.
 
 For each open issue with no card, create one in `triage`:
 

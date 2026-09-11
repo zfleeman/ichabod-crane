@@ -1229,7 +1229,7 @@ Start with three automations:
 
 ### Director pass
 
-Runs hourly. It started at 15–30 minutes, which proved too expensive — a pass costs ~47,700 tokens before it does anything, so cadence, not content, is what spends the quota:
+Runs on a fixed interval, measured in hours. It started at 15–30 minutes, which proved too expensive — a pass costs ~47,700 tokens before it does anything, so cadence, not content, is what spends the quota. The live interval is set in `scripts/configure-automations` and is not repeated here, because every copy of it went stale. The pass itself:
 
 - Review triage, ready, running, review, and blocked cards.
 - Clarify and decompose new Zach requests.
@@ -1241,8 +1241,9 @@ Runs hourly. It started at 15–30 minutes, which proved too expensive — a pas
 
 ### Scout pass
 
-Run once daily:
+Runs a few times a day — again, the schedule lives in `scripts/configure-automations`:
 
+- Sweep open GitHub issues onto the board.
 - Look for a useful project connected to Zach's interests.
 - Create at most one `wild-work` proposal.
 - Include a hypothesis, timebox, cost, acceptance test, and kill condition.
