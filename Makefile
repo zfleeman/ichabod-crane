@@ -17,7 +17,7 @@ GATEWAY_PORT = 18789
 .DEFAULT_GOAL := help
 
 help: ## Show this help
-	@grep -hE '^[a-z-]+:.*##' $(MAKEFILE_LIST) | sed 's/:.*##/\t/' | expand -t 12
+	@grep -hE '^[a-z-]+:.*##' $(MAKEFILE_LIST) | sed 's/:.*##/\t/' | expand -t 16
 
 init: ## Install providers and write the lock file
 	tofu -chdir=tofu init
@@ -31,6 +31,31 @@ plan: ## Show what would change
 
 apply: ## Build or update the infrastructure
 	tofu -chdir=tofu apply
+
+# The box's state, as this repo declares it. Order is not cosmetic: a scheduled
+# job names the agent that owns it, and configure-automations reads the prompt
+# files off the box rather than out of the checkout. Every script here is
+# idempotent, so rerunning sync is the way back to a known box.
+sync: ## Push agents, workspace and scheduled passes to the box
+	scripts/configure-agents
+	scripts/deploy-workspace
+	scripts/configure-automations
+
+# Kept out of sync: this one needs IMAP_PASSWORD in the secret store, and it
+# leaves a timestamped openclaw.json backup on the box every run.
+imap: ## Write the IMAP intake config (needs IMAP_PASSWORD)
+	scripts/configure-imap
+
+# Also kept out of sync: install-plugin ships built output, and building it
+# needs an `openclaw` CLI on this laptop. The script says so if dist/ is stale.
+plugins: ## Install all three plugins from their built dist/
+	@for p in mailbox smtp-send triage-guard; do \
+	  echo "== $$p"; \
+	  scripts/install-plugin $$p || exit 1; \
+	done
+
+sandbox-image: ## Rebuild the Docker image agents are sandboxed in
+	scripts/build-sandbox-image
 
 shell: ## Interactive shell on the box, as ssm-user
 	aws ssm start-session --target $(INSTANCE_ID)
@@ -90,4 +115,4 @@ alarms: ## Current state of every ichabod alarm
 	aws cloudwatch describe-alarms --alarm-name-prefix ichabod- \
 	  --query 'MetricAlarms[].[AlarmName,StateValue]' --output table
 
-.PHONY: help init check plan apply shell openclaw ui status stop start ip alarms
+.PHONY: help init check plan apply sync imap plugins sandbox-image shell openclaw ui status stop start ip alarms
