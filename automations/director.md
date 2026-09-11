@@ -34,14 +34,16 @@ Director pass. You are deciding what happens next, not doing the work. Read the 
 
    This applies to the ones already sitting there. Any `backlog` card whose work has demonstrably shipped under another card goes to `done` too — find the twin's entry from the contents page, open that one file, name both ids, and say which entry you read. If you cannot find that evidence for a given card, leave it in `backlog` and say so; the point is to empty the lane of finished business, not to guess it empty.
 
-8. **Check `MEMORY.md` against its cap.** Run `wc -c MEMORY.md` from the workspace root. `AGENTS.md` caps that file at 4,000 characters, and ~3,800 is the line where you act instead of watch.
+8. **Check `MEMORY.md` against its high-water mark.** Run `wc -c MEMORY.md` from the workspace root. `AGENTS.md` gives that file a band: **5,500 characters is where you act instead of watch, and a curation takes it back to about 4,000.**
 
-   - **At or below ~3,800**, one line in your journal entry with the number. Nothing else.
-   - **Above ~3,800**, create a curation card — `openclaw workboard create "Curate MEMORY.md back under 3,800 characters (currently N)" --agent ichabod --status backlog --labels maintenance --notes "..."` — and journal the number that triggered it next to the new card id.
+   - **At or below 5,500**, one line in your journal entry with the number. Nothing else.
+   - **Above 5,500**, create a curation card — `openclaw workboard create "Curate MEMORY.md back under 4,000 characters (currently N)" --agent ichabod --status backlog --labels maintenance --notes "..."` — and journal the number that triggered it next to the new card id.
 
    This is a check, not a curation. Do not edit `MEMORY.md` on a routing pass — the card you raise is where that work happens, and `memory/2026-09-10/03-0109-card-30beadb6.md` records the method that worked.
 
-   The threshold sits below the cap because the failure it catches is silent. A card pass appends a durable conclusion and does not prune, which is correct behaviour for that pass and invisible from inside it. On 2026-09-09 that happened twice in one day: the file reached 4,689 characters, sat there for a day, then reached 6,171 before a human noticed. Nothing else in the loop looks at the size, so if this pass does not, nobody does.
+   The check exists because the failure it catches is silent. A card pass appends a durable conclusion and does not prune, which is correct behaviour for that pass and invisible from inside it. On 2026-09-09 that happened twice in one day: the file reached 4,689 characters, sat there for a day, then reached 6,171 before a human noticed. Nothing else in the loop looks at the size, so if this pass does not, nobody does.
+
+   **The two numbers are far apart on purpose, and closing the gap re-breaks this.** The first version of this step triggered at ~3,800 under a 4,000 cap, which left 200 characters of working room. Measured on 2026-09-10, one promotion adds 286–624 characters, so the file could not absorb a single new lesson without raising another card: five curation cards fired in under 24 hours, and the fifth (`5f969cce`) established that at ~3,800 the file is at its durable floor with nothing duplicated or stale left to cut. A trigger you cannot get back under is a trigger that fires forever. `memory/2026-09-10/43-2141-card-5f969cce.md` has the arithmetic.
 
 9. Stop. Do not start implementing a card in this session — the pass decides, the dispatched worker does.
 
