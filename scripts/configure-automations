@@ -52,13 +52,18 @@ done
 # All three passes run on Sonnet rather than the agent's Opus default. They
 # route, triage and write; they do not build. This is a Pro subscription, where
 # everything shares one 5-hour bucket and Opus costs roughly 2.5x Sonnet against
-# it — and the director alone runs five times per window.
+# it — and the director alone runs several times per window.
 
-# Director. Hourly, set on 2026-09-10 after the account hit its session limit
-# twice in two days. The history: 1h, briefly 15m, 30m from 2026-09-09, back to
-# 1h now. Halving the cadence halves the fixed per-pass cost, which is where the
-# quota actually goes — ~47,700 tokens of preamble re-sent every turn, against
-# ~1,650 tokens of memory reads. Keep this in step with the live job:
+# The intervals below are written down here and nowhere else. The docs used to
+# repeat them and were wrong within a day of every change, so they now explain
+# the trade and leave the number to this script. `git log` on this file is the
+# history; `openclaw automations list` is what the box is running.
+#
+# Director. Every 2h as of 2026-09-10, after the account hit its session limit
+# twice in two days. The walk back: 1h, briefly 15m, 30m from 2026-09-09, then
+# 1h and 2h on 2026-09-10. Each halving halves the fixed per-pass cost, which is
+# where the quota actually goes — ~47,700 tokens of preamble re-sent every turn,
+# against ~1,650 tokens of memory reads. Keep this in step with the live job:
 # the script removes and recreates, so a stale value here silently reverts a
 # schedule change made on the box. automations/README.md has the note on making
 # this event-driven later.
@@ -70,13 +75,16 @@ done
 # demonstrably runs on this box. Each pass reads the board at the start anyway,
 # so it needs no continuity from the last one.
 oc automations add --name director --display-name "Director pass" \
-  --agent ichabod --model anthropic/claude-sonnet-5 --session isolated --every 1h \
+  --agent ichabod --model anthropic/claude-sonnet-5 --session isolated --every 2h \
   --message "$(cat "$A/director.md")" \
   --timeout-seconds 1800 --no-deliver > /dev/null
 echo "added director"
 
+# Scout. Three passes a day as of 2026-09-10, down from four, for the same quota
+# reason as the director. The 04:00 sweep runs before the 07:00 digest, so an
+# issue filed overnight is already carded by the time the digest reports it.
 oc automations add --name scout --display-name "Scout pass" \
-  --agent ichabod --model anthropic/claude-sonnet-5 --session isolated --cron "0 6,11,16,21 * * *" --tz America/Denver \
+  --agent ichabod --model anthropic/claude-sonnet-5 --session isolated --cron "0 4,11,18 * * *" --tz America/Denver \
   --message "$(cat "$A/scout.md")" \
   --timeout-seconds 900 --no-deliver > /dev/null
 echo "added scout"

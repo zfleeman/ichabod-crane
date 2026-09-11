@@ -2,11 +2,13 @@
 
 The three recurring passes. The files here are the source of truth: `scripts/deploy-workspace` copies them to `/srv/ichabod/automations` on the box, and `scripts/configure-automations` registers them with the Gateway's scheduler.
 
-| File | Job | Schedule | Model |
-|---|---|---|---|
-| `director.md` | Reads the board, triages, dispatches one card, recovers stale claims, retires superseded intake cards | Hourly | Sonnet 5 |
-| `scout.md` | Proposes at most one `wild-work` card | 06:00, 11:00, 16:00, 21:00 America/Denver | Sonnet 5 |
-| `digest.md` | One email to Zach, or silence | Daily, 07:00 America/Denver | Sonnet 5 |
+| File | Job | Model |
+|---|---|---|
+| `director.md` | Reads the board, triages, dispatches one card, recovers stale claims, retires superseded intake cards | Sonnet 5 |
+| `scout.md` | Sweeps open GitHub issues onto the board, proposes at most one `wild-work` card | Sonnet 5 |
+| `digest.md` | One email to Zach, or silence | Sonnet 5 |
+
+**The schedules are deliberately not written down here.** `scripts/configure-automations` is what sets them, so it is the only record that cannot be wrong, and `openclaw automations list` is what the box is actually running. Every cadence copied into prose in this repo went stale within a day of someone changing it. The rule now: a document explains why a cadence is a trade, and never states the interval.
 
 The passes run on Sonnet, not the agent's Opus default, because they route and write rather than build. Dispatched workers still get Opus — see below for why the model choice is a quota decision rather than a quality one.
 
@@ -20,13 +22,13 @@ The rule of thumb: a pass that routes, triages and writes runs on Sonnet; a disp
 
 ## What the director's cadence actually costs
 
-The IMAP watcher is event-driven — `watch: {mode: "auto", pollSeconds: 60}` — so an email becomes a triage card within about a minute of arriving. But nothing dispatches a card on its own, so the director's schedule *is* how long a request waits. Hourly means a card can sit for an hour next to a reader that produced it in one minute. That is the deliberate trade: 24 model sessions a day instead of 288, most of which would find an empty board.
+The IMAP watcher is event-driven — `watch: {mode: "auto", pollSeconds: 60}` — so an email becomes a triage card within about a minute of arriving. But nothing dispatches a card on its own, so the director's schedule *is* how long a request waits: a card sits for up to one full interval next to a reader that produced it in one minute. That is the deliberate trade, and it is made against quota rather than against latency.
 
-**Why hourly and not 30 minutes.** A pass costs about 47,700 tokens before it does anything, and that preamble is re-sent on every turn of the pass — so the bill scales with how often the pass runs, not with what it finds. An empty pass is not a cheap pass. On 2026-09-10 the account hit its five-hour session limit with the director at 30 minutes, for the second time in two days. Halving the cadence halves that fixed cost directly, and it is the only lever available today that needs no experiment: narrowing the tool surface is worth more but is not yet safe, and everything in `memory/` put together is under 3% of a pass.
+**Why the interval keeps getting longer.** A pass costs about 47,700 tokens before it does anything, and that preamble is re-sent on every turn of the pass — so the bill scales with how often the pass runs, not with what it finds. An empty pass is not a cheap pass. The account hit its five-hour session limit twice in two days at the 30-minute cadence, which is what started the walk back: 1h, briefly 15m, 30m from 2026-09-09, 1h and then 2h on 2026-09-10. Each halving halves the fixed per-pass cost directly, and it is the only lever available today that needs no experiment — narrowing the tool surface is worth more but is not yet safe, and everything in `memory/` put together is under 3% of a pass. `git log scripts/configure-automations` carries the reason for each step.
 
-These schedules drift, because Zach changes them by email and a worker card applies the change to the live scheduler. `configure-automations` removes and recreates every job, so a value left stale in that script silently reverts a change someone asked for. When you edit a schedule on the box, edit the script in the same commit.
+These schedules drift, because Zach changes them by email and a worker card applies the change to the live scheduler. `configure-automations` removes and recreates every job, so a value left stale in that script silently reverts a change someone asked for. When you change a schedule on the box, change the script in the same commit — and do not restate the new interval anywhere else.
 
-If that hour ever feels long, the fix is a condition script rather than a tighter schedule — see below. A tighter schedule buys latency by spending quota on empty passes; a condition script only wakes the model when there is something to decide.
+If the wait ever feels long, the fix is a condition script rather than a tighter schedule — see below. A tighter schedule buys latency by spending quota on empty passes; a condition script only wakes the model when there is something to decide.
 
 ## The condition script, and why it is not here yet
 
@@ -75,7 +77,7 @@ The 15:00 hour alone burned 12.7M tokens — that was the hour the director brie
 
 Cumulative input across those 76 sessions was 62.5M tokens, of which the 47.7k baseline re-sent every turn accounts for ~40M and journal reads ~1.4M. A controlled A/B on two identical throwaway cron probes located the baseline: `--tools "*"` costs 42,278 tokens and `--tools "exec,read,write,edit"` costs 10,161, so **~32,000 tokens of every pass is tool schemas**. For scale, a bare `claude -p` in this workspace is 19,312.
 
-So cadence is still the lever — 48 passes a day at ~48k fixed each is the bill — but it multiplies the *preamble*, not the journal. Narrowing `--tools` is the order-of-magnitude fix and is **not yet safe**: it strips the claude-cli harness's native Bash/Read/Write/Edit and substitutes OpenClaw's own `exec`, which backgrounds long commands and returns "still running, pid N". A live director pass on the narrowed list dropped to an 11,983 baseline and then spent 14 turns in a sleep-and-poll loop without reaching a routing decision. It needs either a tool-name list that keeps the native harness tools or a director prompt written against the async `exec` contract. Full working in `memory/2026-09-10/36-1615-card-27de693e.md`.
+So cadence is still the lever — the bill is passes-per-day times that ~48k fixed baseline — but it multiplies the *preamble*, not the journal. Narrowing `--tools` is the order-of-magnitude fix and is **not yet safe**: it strips the claude-cli harness's native Bash/Read/Write/Edit and substitutes OpenClaw's own `exec`, which backgrounds long commands and returns "still running, pid N". A live director pass on the narrowed list dropped to an 11,983 baseline and then spent 14 turns in a sleep-and-poll loop without reaching a routing decision. It needs either a tool-name list that keeps the native harness tools or a director prompt written against the async `exec` contract. Full working in `memory/2026-09-10/36-1615-card-27de693e.md`.
 
 **The rule that follows: never open a whole day.** Read the contents page, open only the entries you need, and refer to a standing decision by its entry name rather than re-reading and restating it.
 
