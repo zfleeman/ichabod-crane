@@ -89,6 +89,8 @@ printf '%s' "$body" | env -i HOME=/tmp PATH=/usr/bin \
      @/srv/ichabod/prompts/membrane.md
 ```
 
+Note the mode: **`-p`, not `--mode json`.** The passes use JSON mode because they need token counts, but the membrane's whole contract is that its output is four fields the wrapper validates. Under JSON mode the wrapper would have to unwrap an event envelope and then parse the text inside it — two parsers on the one path in this system where hostile input arrives. Fewer moving parts wins here.
+
 Read `--tools ""` carefully: that is an **empty** tool list, not a short one. Pi normally offers `read`, `write`, `edit`, `bash`, `grep`, `find` and `ls`. With an empty list it has none of them. The process cannot open a file, cannot run a command, cannot reach the network. The only thing it can do is print text.
 
 That is the whole security property, and it is worth saying plainly: **it does not matter what the email says, because the process reading it has no way to act on anything.**
@@ -104,6 +106,8 @@ Pi prints text. `intake` parses that text as JSON and checks it against a fixed 
 Four fields, all strings except one boolean. If the output is not valid JSON, or has extra fields, or is missing one, `intake` files the message in a quarantine folder and emails Zach. It does not guess.
 
 If it validates, **`intake` calls `board createTask` itself**, with the column and labels hardcoded in the script.
+
+One practical trap: models routinely wrap JSON in Markdown fences. Strip fences before parsing, and treat anything still unparseable as a quarantine rather than trying to repair it — a repair step is a parser that runs on hostile text, which is what this whole design exists to avoid.
 
 ## Why step 3 is the important one
 

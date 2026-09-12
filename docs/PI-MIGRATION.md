@@ -74,15 +74,37 @@ The crontab, as a starting shape:
 set -euo pipefail
 name="$1"
 set -a; . /srv/ichabod/env; set +a
-exec flock -n "/run/ichabod/$name.lock" \
+day="$(date +%F)"; out="/srv/ichabod/log/$day/$(date +%H%M)-$name.jsonl"
+mkdir -p "/srv/ichabod/log/$day"
+
+rc=0
+flock -n "/run/ichabod/$name.lock" \
   timeout 1800 \
-  pi -p --mode json --tools read,write,edit,bash --no-session \
+  pi --mode json --tools read,write,edit,bash --no-session \
      -C /srv/ichabod/workspace \
-     @"/srv/ichabod/prompts/$name.md" \
-  > "/srv/ichabod/log/$(date +%F)/$(date +%H%M)-$name.jsonl"
+     @"/srv/ichabod/prompts/$name.md" > "$out" || rc=$?
+
+# The number this whole migration is about, one line per pass. Field names are
+# a guess until Phase 0 reads a real event; do not trust this jq as written.
+jq -s '[.[] | .usage // empty] | {pass: "'"$name"'",
+       in: (map(.input_tokens) | add), out: (map(.output_tokens) | add)}' \
+  "$out" >> /srv/ichabod/log/cost.jsonl
+exit $rc
 ```
 
-`flock -n` is the concurrency rule that `--max-starts 1` enforces today: if the previous run is still going, this one exits rather than stacking. `timeout` is the stall recovery that "a `running` card that has not moved in over an hour is stuck" currently handles by hand.
+`flock -n` is the concurrency rule that `--max-starts 1` enforces today: if the previous run is still going, this one exits rather than stacking. `timeout` is the stall recovery that "a `running` card that has not moved in over an hour is stuck" currently handles by hand. `rc` is captured rather than allowed to abort under `set -e`, because a failed pass still has a log worth summarising.
+
+### Which run mode, and why
+
+Pi has four: interactive, print (`-p`), JSON (`--mode json`), and RPC (`--mode rpc`). Two of them are used here.
+
+**Passes use `--mode json`.** `-p` prints the final assistant message and nothing else — no token counts, no record of which tools were called. The whole point of this migration is a token number, so a mode that does not emit one leaves us blind in the exact place we are trying to see. JSON mode also means the log file and the event stream are the same artifact, so there is no separate logging to write, and a pass killed by `timeout` still leaves everything up to the kill rather than nothing.
+
+**The membrane uses `-p`.** Its contract is four fields of JSON validated by the wrapper. Under `--mode json` the wrapper would have to pull the assistant text out of an event envelope and then parse that — two parsers on the one path where hostile input arrives, which is the wrong place to add surface. Its token usage does not need measuring either. One trap to handle in `intake`: models commonly wrap JSON output in Markdown fences, so strip fences before parsing rather than assuming a bare object.
+
+**Nothing uses RPC.** RPC holds a live session and exposes `prompt`, `steer`, `follow_up`, `abort` and `get_state` over line-delimited JSON on stdin. That is for an orchestrator that wants to intervene mid-turn. Our passes are fire-and-forget — cron starts them, they finish or time out, and there is nothing to steer. Adopting it means writing a client that owns process lifecycle and framing, which is a daemon, which is the category of machinery we are removing OpenClaw to be rid of. It becomes worth revisiting only if a pass needs to be interruptible, or if `route` and `work` collapse into one long-lived loop — a Phase 6 question.
+
+**Verify the flag spelling in Phase 0.** An earlier draft of this document wrote `pi -p --mode json`. That is probably invalid, since `-p` is very likely shorthand for `--mode print`, in which case the two contradict and one wins silently. Confirm which before the wrapper is built on it.
 
 **Keep `route` and `work` separate at first, even though collapsing them is tempting.** `route.md` is `director.md` with the workboard commands swapped out, and that prompt is battle-tested — eight numbered steps refined against real failures. `work.md` is new. Merging them into one "read the board, do the next thing" loop is the genuinely Sammy-shaped end state and is probably right eventually, but it changes two things at once. Do it as a later simplification, once the substrate is proven, and do it because the separation turned out not to earn its keep rather than on principle.
 
@@ -172,7 +194,8 @@ Each phase ends in a state the box can sit in indefinitely. Nothing after Phase 
 ### Phase 0 — Prove it, change nothing
 
 - [ ] Install `pi` on the box as a new `ichabod` user. OpenClaw keeps running untouched.
-- [ ] Run `scout.md` under `pi -p` by hand. Measure the preamble off the first `--mode json` usage event.
+- [ ] Settle the run-mode flags. Confirm whether `-p` and `--mode json` can be combined, and read one real event stream to get the actual `usage` field names before the `pass` wrapper's `jq` is written.
+- [ ] Run `scout.md` under `pi --mode json` by hand. Measure the preamble off the first usage event.
 - [ ] Stand up Kanboard in Docker behind Traefik at `board.ichabod-crane.net`, and write `board`. Confirm the round-trip: `board createTask` from inside Pi's `bash`, as `ichabod`.
 - [ ] Establish the model and the currency. Can Pi use the Claude subscription, or is this API-key-only? Price one real pass, then multiply by the crontab above and by a day of dispatched workers.
 - [ ] **Gate:** a measured preamble well under 38,831, a real card created through `board`, and a daily cost Zach has looked at and accepted. If any one fails, stop and keep OpenClaw.
