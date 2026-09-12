@@ -89,6 +89,8 @@ Two unknowns before believing any of this. Its docs list Anthropic Claude Pro/Ma
 - **Effort:** a weekend for one pass as a spike; weeks to move the whole estate.
 - **Verify first:** subscription auth, then measure a real preamble.
 
+[OPENCLAW-AND-PI.md](OPENCLAW-AND-PI.md) works this option out mechanically: how OpenClaw drives a model with an API key today, what changes when Pi owns the loop instead, and the wrapper script a spike would need.
+
 ### D. Rohrer's own clone kit — ~25,000, estimated
 
 Since Sammy Jankis is the reference point, worth saying plainly what it actually is: ~5 KB of scripts and templates, a Linux box, Claude Code, and an email account. It checks email every fifteen minutes. Memory is journal files. There is no platform.
