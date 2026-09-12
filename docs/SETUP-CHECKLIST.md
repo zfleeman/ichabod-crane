@@ -6,6 +6,8 @@ Only human work is listed. Anything Ichabod does for itself once it is running �
 
 [ICHABOD-GUIDE.md](ICHABOD-GUIDE.md) explains why each of these is the way it is. This file only says what to do and how to know it worked.
 
+> **Being superseded.** This checklist builds the OpenClaw stack. It is the correct way to rebuild the box as it stands today, and it is what the running machine was built from. The box is moving to Pi and cron — [PI-MIGRATION.md](PI-MIGRATION.md) — so treat the OpenClaw sections as a record of the current state rather than as the target.
+
 ---
 
 ## 1. Accounts, domain, and OpenTofu

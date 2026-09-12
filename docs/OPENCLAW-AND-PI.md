@@ -1,5 +1,7 @@
 # OpenClaw and Pi
 
+> **Superseded in one respect.** This memo's closing suggestion is a single scout pass under Pi with OpenClaw kept as the estate. The decision went further: OpenClaw goes entirely, and the board becomes Kanboard reached by a shell wrapper rather than by MCP — for exactly the preamble reason measured here. See [PI-MIGRATION.md](PI-MIGRATION.md). Everything about how the two harnesses actually work is unchanged.
+
 A working memo from 2026-09-11, written as the companion to option C in [HARNESS-ALTERNATIVES.md](HARNESS-ALTERNATIVES.md). That memo asked whether Pi is worth trying. This one answers the mechanical question underneath it: if we did, what would actually happen on the box, minute by minute, and how does that differ from the way OpenClaw already drives a model with an API key?
 
 The framing assumption, granted up front: Pi gets an OpenAI API key. That removes the subscription-auth unknown that option C stalls on, and it makes the comparison a fair one, because OpenClaw with an OpenAI API key is not hypothetical here. It is `mail_reader`, running today.

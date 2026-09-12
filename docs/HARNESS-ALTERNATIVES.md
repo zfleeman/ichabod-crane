@@ -1,5 +1,7 @@
 # Harness alternatives
 
+> **Decided, and further than this memo recommends.** Zach's call on 2026-09-11 was to leave OpenClaw entirely for Pi and cron, rather than run the single-pass spike in "Recommended order" below. The measurements and the option comparison stand as written; the recommendation at the end has been overtaken. [PI-MIGRATION.md](PI-MIGRATION.md) is the plan that replaced it, and [OPENCLAW-AND-PI.md](OPENCLAW-AND-PI.md) works out the mechanics of option C.
+
 A working memo from 2026-09-11, written after a day of measuring where the director pass actually spends its tokens. The question behind it: is OpenClaw-on-Claude-Code the right housing for this experiment, and if not, what else is there? Preamble numbers are measured on the live box unless marked as estimates.
 
 ## The part that isn't obvious

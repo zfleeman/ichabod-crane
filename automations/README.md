@@ -1,5 +1,7 @@
 # Automations
 
+> **Moving to cron.** These three passes are being ported to `pi -p` under a plain crontab, and the OpenClaw scheduler goes away with the Gateway — [docs/PI-MIGRATION.md](../docs/PI-MIGRATION.md), phases 2 and 3. The prompt files here are what gets ported; everything below about the scheduler's behaviour stays true until Phase 5 removes it, and the cost analysis is the reason the migration exists.
+
 The three recurring passes. The files here are the source of truth, and `make sync` is how they reach the box: it ships them to `/srv/ichabod/automations` and re-registers every job with the Gateway's scheduler, in that order. Never run `configure-automations` alone after editing a prompt — it reads the file off the box, so it would bake in the old text.
 
 | File | Job | Model |

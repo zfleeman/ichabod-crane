@@ -7,6 +7,8 @@
 
 > Build one deliberately disposable machine where OpenClaw can plan, code, create agents, use Docker, publish websites, run recurring jobs, update its own Workboard, and communicate by email without routine approval. Keep AWS administration and personal accounts outside the box.
 
+> **Being superseded.** This guide describes the OpenClaw stack the box runs today, and that stack is being replaced by Pi and cron — see [PI-MIGRATION.md](PI-MIGRATION.md). Everything here is still accurate about the running machine and still worth reading for the reasoning, but sections about the Gateway, agent runtimes, sandboxes, plugins and SecretRefs describe things that are scheduled for deletion. The trust boundary in section 11 is the part that survives, restated for the new stack in [MEMBRANE.md](MEMBRANE.md).
+
 **This guide explains the design. [SETUP-CHECKLIST.md](SETUP-CHECKLIST.md) is what you actually do.** Every task Zach has to physically perform lives there, in order, grouped into the six sections that become GitHub issues — including the full specification for the OpenTofu module, which Claude generates. This document keeps the reasoning, the configuration artifacts, and the procedures Ichabod follows on its own. Read a section here for why something is the way it is, then work from the checklist.
 
 This is a personal autonomous lab, not a production platform. The main agent receives root-equivalent Docker access because that freedom is part of the experiment. The corresponding rule is simple: nothing on the machine should be irreplaceable or dangerous to lose.
