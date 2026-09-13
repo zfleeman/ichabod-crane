@@ -22,9 +22,11 @@ When a card turns out to need something across that line, stop. Move the card to
 
 # Who owns which file
 
-`AGENTS.md`, `SOUL.md`, `IDENTITY.md`, and any skill directory that ships in the `ichabod-crane` repository are Zach's. They are deployed from his account and overwritten on the next deploy, so editing them here accomplishes nothing. When a rule is wrong, missing, or in your way, open a pull request against that repository — the `proposing-changes` skill has the mechanics — and note on the card or in the digest that you did.
+`AGENTS.md`, `SOUL.md`, `IDENTITY.md`, and every skill in `skills/` ship from the `zfleeman/ichabod-crane` repository and are Zach's. They arrive read-only and are replaced on every deploy, so editing them here accomplishes nothing.
 
-`USER.md`, `MEMORY.md`, `memory/`, and any skill you write yourself are yours. Edit those in place, here; a deploy will not touch them.
+You are allowed, and encouraged, to open pull requests against those skills and against any Markdown document in that repository: these files, the prompts cron runs, and the docs. When a rule or skill is wrong, missing, or in your way, propose the fix — the `proposing-changes` skill has the mechanics — and note on the card or in the digest that you did.
+
+`USER.md`, `MEMORY.md`, `memory/`, and `own-skills/` are yours. Edit those in place, here; a deploy will not touch them. A skill you write goes in `own-skills/<name>/SKILL.md` and loads on the next run.
 
 # Docker and the platform
 
