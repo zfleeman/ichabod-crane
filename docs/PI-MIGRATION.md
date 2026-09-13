@@ -11,7 +11,7 @@ Settled, so that the phases below read as work rather than as options. The reaso
 | Decision | Where |
 |---|---|
 | Pi plus cron replaces OpenClaw entirely | this document |
-| The board is Kanboard, on the box, at `board.ichabod-crane.net` | [The board](#the-board) |
+| The board is Kanboard, home-hosted on Zach's Synology, at `ichabod-board.zfleeman.com` | [The board](#the-board) |
 | The agent reaches the board through a `board` shell wrapper, **not** MCP | [The board](#the-board) |
 | The mail membrane keeps its boundary, rebuilt around a tool-less reader | [MEMBRANE.md](MEMBRANE.md) |
 | The membrane runs as `ichabod`, not as a user of its own | [MEMBRANE.md](MEMBRANE.md) |
@@ -131,7 +131,7 @@ Pi has four: interactive, print (`-p`), JSON (`--mode json`), and RPC (`--mode r
 
 ## The board
 
-**Decided: Kanboard at `board.ichabod-crane.net`, reached by a `board` shell wrapper over its JSON-RPC API. Not over MCP.**
+**Decided: Kanboard at `ichabod-board.zfleeman.com`, home-hosted on Zach's Synology, reached by a `board` shell wrapper over its JSON-RPC API. Not over MCP.**
 
 That second sentence is the whole design decision, and it is worth being blunt about why. MCP tool schemas are the tax this migration exists to remove — the 20-tool director preamble measured at 38,831 tokens carries 67,183 characters of tool schemas, most of it OpenClaw's 14 bridged MCP tools, re-sent on every single turn. Bolting a Kanboard MCP server onto Pi recreates that in miniature, permanently, for a board we could reach with `curl`. Pi does not ship MCP support at all; it arrives through a third-party adapter, and the most-recommended one advertises itself as "token-efficient," which tells you what the naive version costs.
 
@@ -150,16 +150,16 @@ curl -sS -u "jsonrpc:$KANBOARD_TOKEN" "$KANBOARD_URL/jsonrpc.php" \
 
 ### Where Kanboard runs
 
-The box has no inbound SSH and reaches the world outbound only, and the loop needs the board every fifteen minutes. Hosting Kanboard at home means putting a tunnel in the path of the operating loop.
+The box has no inbound SSH and reaches the world outbound only, and the loop needs the board every fifteen minutes. That constrains reachability, not location: the box just needs a public HTTPS endpoint to call, wherever the server actually sits.
 
-**Decided: on the ichabod box, in Docker, behind Traefik at `board.ichabod-crane.net`.** That is the pattern the box already runs for everything it deploys, the wildcard cert already exists, and `AGENTS.md` already grants authority over that hostname. The agent reaches it over loopback; Zach reaches it over the web from anywhere, including his own network. No tunnel, no new inbound path, nothing in the loop that can be unreachable.
+**Decided: home-hosted, on Zach's Synology, behind the reverse proxy already running there, at `ichabod-board.zfleeman.com`.** The reverse proxy and its cert already exist for other services, so this is one more hostname on infrastructure already up, not new machinery. Ichabod reaches it exactly like any other outbound HTTPS call from the `board` wrapper — the box makes no distinction between a hostname resolving to its own Traefik and one resolving to a home IP. No tunnel and no VPN client to keep alive on ichabod.
 
-Two consequences to handle deliberately:
+This drops both consequences the on-box plan would have carried:
 
-- **Ichabod can destroy his own board.** `AGENTS.md` grants full Docker authority including `system prune` and volumes, and warns in the same breath that destroying a named volume usually destroys the only copy of an application's data. The Kanboard volume needs a named exception in that file, in the same voice as the other ceilings.
-- **The board dies with the box.** A `tofu` rebuild is a new EBS volume. The fix is a plain-text mirror rather than a backup product: a nightly `board getAllTasks` dump committed into the workspace repo. Diffable, off-box, and restorable into a fresh Kanboard or read by a human with no Kanboard at all.
+- **Ichabod has no path to destroy the board.** Kanboard's Docker lives on the Synology, not on the box, so `AGENTS.md`'s Docker authority (including `system prune` and volume removal) never reaches it. No named exception needed.
+- **The board no longer dies with the box.** A `tofu` rebuild is a new EBS volume for ichabod, but Kanboard's data lives on separate hardware Zach controls directly. The nightly `board getAllTasks` dump into the workspace repo is still worth keeping regardless — a diffable, off-box mirror is useful for history and for restoring into a fresh Kanboard no matter which machine failed.
 
-Running it at home was the alternative, and it was not taken. It would mean joining the EC2 box to a tailnet and putting a tunnel in the operating loop, in exchange for a board that survives the box. The nightly dump gets most of that survival benefit without the tunnel. Recorded here so the trade is not re-argued from scratch later.
+This reverses an earlier call: home hosting was floated and set aside because it seemed to mean joining the box to a tailnet and putting a tunnel in the operating loop. That concern doesn't apply here — the reverse proxy and public hostname already exist on the Synology, so there's no new inbound path to build, just a new subdomain on something already running. The remaining risk is home network and power uptime, which Zach is accepting directly rather than routing around.
 
 ### On GitHub Projects, since you asked
 
@@ -196,7 +196,7 @@ Each phase ends in a state the box can sit in indefinitely. Nothing after Phase 
 - [ ] Install `pi` on the box as a new `ichabod` user. OpenClaw keeps running untouched.
 - [ ] Settle the run-mode flags. Confirm whether `-p` and `--mode json` can be combined, and read one real event stream to get the actual `usage` field names before the `pass` wrapper's `jq` is written.
 - [ ] Run `scout.md` under `pi --mode json` by hand. Measure the preamble off the first usage event.
-- [ ] Stand up Kanboard in Docker behind Traefik at `board.ichabod-crane.net`, and write `board`. Confirm the round-trip: `board createTask` from inside Pi's `bash`, as `ichabod`.
+- [ ] Stand up Kanboard on the Synology, behind the existing reverse proxy, at `ichabod-board.zfleeman.com`, and write `board`. Confirm the round-trip: `board createTask` from inside Pi's `bash`, as `ichabod`.
 - [ ] Establish the model and the currency. Can Pi use the Claude subscription, or is this API-key-only? Price one real pass, then multiply by the crontab above and by a day of dispatched workers.
 - [ ] **Gate:** a measured preamble well under 38,831, a real card created through `board`, and a daily cost Zach has looked at and accepted. If any one fails, stop and keep OpenClaw.
 
@@ -223,7 +223,6 @@ Scout and digest. They read and report; if they break, nothing is lost and you f
 The biggest single piece, and the point of no easy return.
 
 - [ ] Kanboard is already up from Phase 0. Define the swimlanes and columns to match today's statuses: triage, backlog, ready, running, review, blocked, done.
-- [ ] Name the Kanboard volume in `AGENTS.md` as a thing Ichabod does not remove, alongside the existing capacity ceilings.
 - [ ] Add the nightly `board getAllTasks` dump, committed into the workspace repo.
 - [ ] Migrate live cards. Everything not `done` becomes a Kanboard task; `done` cards export to one file and are dropped.
 - [ ] Rewrite `director.md` into `route.md` against `board`. Steps 2, 4, 5 and 6 get shorter; step 1's projection one-liner and step 7's twin-retirement both disappear, since Kanboard returns small results and tasks can be edited in place.
