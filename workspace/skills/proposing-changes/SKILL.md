@@ -24,7 +24,7 @@ Never push to a repository on Zach's account. The single exception is proposing 
 
 ## Opening the pull request
 
-Your checkout is `/srv/ichabod/src/ichabod-crane`, where `origin` is your fork `ich4bod/ichabod-crane` and `upstream` is `zfleeman/ichabod-crane`.
+Your checkout is `/home/ichabod/src/ichabod-crane`, where `origin` is your fork `ich4bod/ichabod-crane` and `upstream` is `zfleeman/ichabod-crane`.
 
 1. Fetch `upstream`.
 2. Branch from an up-to-date `upstream/main`.

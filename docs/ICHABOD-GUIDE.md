@@ -77,7 +77,7 @@ Everything below runs from `make shell`, which lands as `ssm-user` with password
 
 1. `apt-get update && apt-get upgrade -y`, install `ca-certificates curl git jq unzip build-essential`, reboot.
 2. `useradd --create-home --shell /bin/bash ichabod`. Name the shell: `useradd` defaults to `/bin/sh`, which is dash on Ubuntu, and a dash login shell never reads `~/.bashrc`, so installer `PATH` lines silently never load.
-3. Create `/srv/ichabod` and its `apps`, `platform` and `backups` directories, owned by `ichabod`.
+3. Create `apps`, `platform` and `backups` under `/home/ichabod`.
 4. A 4 GiB swap file in `/etc/fstab`. It is an OOM fuse, not working memory.
 5. `systemctl disable --now ssh ssh.socket`. Both units: on 24.04 sshd is socket-activated, so disabling only the service leaves port 22 listening. `ss -lntp` showing nothing on 22 is the check that settles it.
 6. Install the CloudWatch agent. Its config lives at `/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json`, collects only `/`, and sets `aggregation_dimensions` to `InstanceId`. Both details are load-bearing: the alarms have `InstanceId` as their only dimension, and the default per-filesystem metrics also carry `path`, `device` and `fstype`, which never match.
@@ -93,9 +93,9 @@ Everything below runs from `make shell`, which lands as `ssm-user` with password
 
 | Path | Contents | Backed up by |
 |---|---|---|
-| `/srv/ichabod/apps/<slug>/` | One directory per application: source, Dockerfile, `compose.yaml`, its own `.git` | GitHub for source, the app's own backup for data |
-| `/srv/ichabod/platform/` | Traefik and other host-owned compose projects | Git |
-| `/srv/ichabod/backups/` | Staging before a backup leaves the box | Copied off-host |
+| `/home/ichabod/apps/<slug>/` | One directory per application: source, Dockerfile, `compose.yaml`, its own `.git` | GitHub for source, the app's own backup for data |
+| `/home/ichabod/platform/` | Traefik and other host-owned compose projects | Git |
+| `/home/ichabod/backups/` | Staging before a backup leaves the box | Copied off-host |
 | `/var/lib/docker/` | Images, layers, build cache, named volumes | Volume by volume, never wholesale |
 
 The runtime's own directories are laid out in [PI-MIGRATION.md](PI-MIGRATION.md#target-architecture). `/var/lib/docker` is what fills the disk; `docker system df` is the thing to watch.
@@ -114,7 +114,7 @@ Traefik is the only deployment control plane. It owns 80 and 443, watches the Do
 
 ## Traefik, once
 
-`/srv/ichabod/platform/traefik/compose.yaml`, on a pinned Traefik 3.x image:
+`/home/ichabod/platform/traefik/compose.yaml`, on a pinned Traefik 3.x image:
 
 ```yaml
 name: ichabod-proxy
@@ -173,7 +173,7 @@ Back up the `ichabod-proxy_letsencrypt` volume or expect to re-issue after a reb
 The deploy sequence:
 
 ```bash
-cd /srv/ichabod/apps/<slug>
+cd /home/ichabod/apps/<slug>
 docker compose config
 docker compose build
 docker compose run --rm <tests>

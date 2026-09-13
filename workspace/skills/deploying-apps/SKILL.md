@@ -1,6 +1,6 @@
 ---
 name: deploying-apps
-description: Use when building, deploying, restarting, or removing anything that runs in Docker on this host — application containers under /srv/ichabod/apps, Traefik, or volumes.
+description: Use when building, deploying, restarting, or removing anything that runs in Docker on this host — application containers under /home/ichabod/apps, Traefik, or volumes.
 user-invocable: false
 ---
 
@@ -14,13 +14,13 @@ A named volume is usually the only copy of an application's data. Take that appl
 
 ## The application contract
 
-Deploy with Docker Compose and Traefik labels. `/srv/ichabod/templates/app/compose.yaml` is the starting point and already carries the right shape:
+Deploy with Docker Compose and Traefik labels. `/home/ichabod/templates/app/compose.yaml` is the starting point and already carries the right shape:
 
-- `cpus: "0.50"` and `mem_limit: 512m` on every application container under `/srv/ichabod/apps/`, unless the card says otherwise and says why. Those numbers are a blast radius, not a budget — the two static sites on the box peak around 8 MiB, about 1.6% of the memory ceiling — so raise them from a measured peak recorded on the card, never from an estimate.
+- `cpus: "0.50"` and `mem_limit: 512m` on every application container under `/home/ichabod/apps/`, unless the card says otherwise and says why. Those numbers are a blast radius, not a budget — the two static sites on the box peak around 8 MiB, about 1.6% of the memory ceiling — so raise them from a measured peak recorded on the card, never from an estimate.
 - Traefik labels for routing, on the external `ichabod-proxy` network. Traefik terminates TLS for `*.ichabod-crane.net`, so a new hostname needs no certificate work.
 - A healthcheck the container can actually fail.
 
-Traefik itself, under `/srv/ichabod/platform/`, is deliberately unbounded. Do not put a limit on it without a card carrying a measured peak.
+Traefik itself, under `/home/ichabod/platform/`, is deliberately unbounded. Do not put a limit on it without a card carrying a measured peak.
 
 ## Before you claim it works
 

@@ -17,7 +17,7 @@ The short reason: a routing pass under OpenClaw carried 38,831 tokens of preambl
 ## How it works
 
 ```
-email ──> intake ──> pi, no tools ──> validated card ──> pass (pi, cron) ──> work + reply
+email ──> intake ──> pi, no tools ──> validated card ──> run-pass (pi, cron) ──> work + reply
           (DMARC)    (reads only)      (Kanboard)         (full host)
 ```
 

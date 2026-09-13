@@ -48,9 +48,9 @@ The good news is that it should get *stronger*. Every sandbox failure this proje
 One box, one Unix user, five scripts, one crontab.
 
 ```
-/srv/ichabod/
+/home/ichabod/
   bin/
-    pass          run one prompt file under pi, with a lock and a timeout
+    run-pass      run one prompt file under pi, with a lock and a timeout
     board         one curl per Kanboard JSON-RPC method, the agent's only board access
     intake        fetch mail -> membrane -> card
     notify        send one email
@@ -59,7 +59,7 @@ One box, one Unix user, five scripts, one crontab.
     route.md  work.md  scout.md  digest.md  membrane.md
   workspace/      AGENTS.md, IDENTITY.md, SOUL.md, USER.md, MEMORY.md, memory/, skills/
   log/            YYYY-MM-DD/HHMM-<pass>.jsonl, one per run
-  env             0600, the API keys, sourced by the wrappers
+  .config/ichabod/env  0600, the API keys, sourced by the wrappers
 ```
 
 `ichabod` runs every pass, every worker, and the membrane wrapper, and holds Docker, `gh`, the API keys and the mailbox. The membrane runs as `ichabod` rather than as a user of its own — see [MEMBRANE.md](MEMBRANE.md#what-we-deliberately-gave-up) for what that costs and how the isolation is kept anyway.
@@ -67,35 +67,35 @@ One box, one Unix user, five scripts, one crontab.
 The crontab, as a starting shape:
 
 ```cron
-*/5  * * * *  /srv/ichabod/bin/intake
-*/15 * * * *  /srv/ichabod/bin/pass route
-*/15 * * * *  /srv/ichabod/bin/pass work
-0 4,11,18 * * *  /srv/ichabod/bin/pass scout
-0 7  * * *    /srv/ichabod/bin/pass digest
+*/5  * * * *  /home/ichabod/bin/intake
+*/15 * * * *  /home/ichabod/bin/run-pass route
+*/15 * * * *  /home/ichabod/bin/run-pass work
+0 4,11,18 * * *  /home/ichabod/bin/run-pass scout
+0 7  * * *    /home/ichabod/bin/run-pass digest
 ```
 
-`pass` is the whole harness. Roughly:
+`run-pass` is the whole harness. Roughly:
 
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
 name="$1"
-set -a; . /srv/ichabod/env; set +a
-day="$(date +%F)"; out="/srv/ichabod/log/$day/$(date +%H%M)-$name.jsonl"
-mkdir -p "/srv/ichabod/log/$day"
+set -a; . /home/ichabod/.config/ichabod/env; set +a
+day="$(date +%F)"; out="/home/ichabod/log/$day/$(date +%H%M)-$name.jsonl"
+mkdir -p "/home/ichabod/log/$day" /home/ichabod/.local/state
 
 rc=0
-flock -n "/run/ichabod/$name.lock" \
+flock -n "/home/ichabod/.local/state/$name.lock" \
   timeout 1800 \
   pi --mode json --tools read,write,edit,bash --no-session \
-     -C /srv/ichabod/workspace \
-     @"/srv/ichabod/prompts/$name.md" > "$out" || rc=$?
+     -C /home/ichabod/workspace \
+     @"/home/ichabod/prompts/$name.md" > "$out" || rc=$?
 
 # The number this whole migration is about, one line per pass. Field names are
 # a guess until someone reads a real event; do not trust this jq as written.
 jq -s '[.[] | .usage // empty] | {pass: "'"$name"'",
        in: (map(.input_tokens) | add), out: (map(.output_tokens) | add)}' \
-  "$out" >> /srv/ichabod/log/cost.jsonl
+  "$out" >> /home/ichabod/log/cost.jsonl
 exit $rc
 ```
 
@@ -134,7 +134,7 @@ Pi has four: interactive, print (`-p`), JSON (`--mode json`), and RPC (`--mode r
 | IMAP intake plugin | ~40 lines of Python `imaplib` in `intake` | High. The gate's rules are in [MEMBRANE.md](MEMBRANE.md#step-1--fetch) |
 | `smtp-send` plugin | ~20 lines of Python `smtplib` in `notify` | High. Keep its rules: Zach is the only recipient, enforced in code; envelope sender and `From` both `ichabod@ichabod-crane.net`; retry `4xx`, stop on `5xx`; a per-hour send cap as a retry-loop backstop; the password redacted out of any error text |
 | `mailbox` plugin (search/archive) | The same script, more subcommands | High |
-| SecretRefs + secret store | `/srv/ichabod/env`, mode 0600 | High, and honest — see below |
+| SecretRefs + secret store | `/home/ichabod/.config/ichabod/env`, mode 0600 | High, and honest — see below |
 | Session ledger, token accounting | Pi's `--mode json` events, one file per run in `log/` | High. Better for forensics than today |
 | `backup create --verify` | `git commit` of `workspace/` to a private repo, every pass | High. Off-box and diffable |
 | Model fallback chain | Nothing. A provider outage fails the pass; cron retries | Accepted loss |

@@ -38,8 +38,8 @@ Everything you run shares one `t3a.large`. These are the ceilings. Only the appl
 
 - One build-heavy or browser-heavy card at a time. That holds until Zach raises it, whatever the board is willing to dispatch.
 - At most five experimental services running at once. Check with `docker compose ls` before starting a sixth, and retire one rather than adding to the pile.
-- Every application container under `/srv/ichabod/apps/` gets `cpus: "0.50"` and `mem_limit: 512m` unless the card says otherwise and says why. Those numbers are a blast radius, not a budget, and are raised from a measured peak on the card, never from an estimate.
-- Traefik under `/srv/ichabod/platform/` sits outside that rule and is unbounded. Do not put a limit on it without a card carrying a measured peak.
+- Every application container under `/home/ichabod/apps/` gets `cpus: "0.50"` and `mem_limit: 512m` unless the card says otherwise and says why. Those numbers are a blast radius, not a budget, and are raised from a measured peak on the card, never from an estimate.
+- Traefik under `/home/ichabod/platform/` sits outside that rule and is unbounded. Do not put a limit on it without a card carrying a measured peak.
 - Every automated card gets a timeout and a retry budget when it is written. A card with neither can spin all night.
 - Above 75% disk, stop proposing new work and clear space first: `docker system prune`, old images, and any volume you have a backup of.
 - When Claude quota is exhausted, stop and wait for the reset. Do not switch to metered API usage to keep working — that spends Zach's money to avoid an hour of idleness, and he would rather have the idle hour.

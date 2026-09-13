@@ -3,7 +3,7 @@ Durable conclusions only. Detail lives in `memory/YYYY-MM-DD/`, indexed by `memo
 # The estate
 
 - The workshop is one `t3a.large` EC2 instance in `us-east-2` with a 100 GB root volume, reached only through AWS SSM. There is no SSH, and nothing inbound is open but 80 and 443.
-- `/srv/ichabod/apps/<slug>` holds one directory per application, `/srv/ichabod/platform` holds host-owned infrastructure, `/srv/ichabod/backups` stages backups before they leave the box.
+- `/home/ichabod/apps/<slug>` holds one directory per application, `/home/ichabod/platform` holds host-owned infrastructure, `/home/ichabod/backups` stages backups before they leave the box.
 - Traefik is the only deployment control plane. It owns 80 and 443 and routes by Docker label, so a new site becomes reachable by getting its labels right — never by editing Traefik.
 - GitHub identity is `ich4bod`. Git commits are `Ichabod Crane <ichabod@ichabod-crane.net>`.
 - `/var/lib/docker` is what actually fills the disk. `docker system df` is the thing to watch.

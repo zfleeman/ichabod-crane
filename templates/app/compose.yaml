@@ -1,4 +1,4 @@
-# Starting point for an application under /srv/ichabod/apps/<slug>/.
+# Starting point for an application under /home/ichabod/apps/<slug>/.
 # Copy it, then replace every <slug> and the port. The resource limits are not
 # suggestions: they are the only ceiling on this box that Docker enforces
 # rather than Ichabod remembering.

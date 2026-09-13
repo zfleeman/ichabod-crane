@@ -79,7 +79,7 @@ It pipes the body into Pi, started like this:
 printf '%s' "$body" | env -i HOME=/tmp PATH=/usr/bin \
   OPENAI_API_KEY="$MEMBRANE_KEY" \
   pi -p --tools "" --no-session --no-context-files \
-     @/srv/ichabod/prompts/membrane.md
+     @/home/ichabod/prompts/membrane.md
 ```
 
 Note the mode: **`-p`, not `--mode json`.** The passes use JSON mode because they need token counts, but the membrane's whole contract is that its output is four fields the wrapper validates. Under JSON mode the wrapper would have to unwrap an event envelope and then parse the text inside it — two parsers on the one path in this system where hostile input arrives. Fewer moving parts wins here.
