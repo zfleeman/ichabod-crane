@@ -44,7 +44,7 @@ The good news is that it should get *stronger*. Every sandbox failure this proje
 
 ## Target architecture
 
-One box, one Unix user, five scripts, one crontab.
+One box, one Unix user, six scripts, one crontab.
 
 ```
 /home/ichabod/
@@ -54,6 +54,7 @@ One box, one Unix user, five scripts, one crontab.
     intake        fetch mail -> membrane -> card
     notify        send one email
     health        touch on success; shout when stale
+    usage         the ChatGPT Plus 5-hour and weekly usage, as one JSON line
   prompts/
     route.md  work.md  scout.md  digest.md  membrane.md
   workspace/      AGENTS.md, IDENTITY.md, SOUL.md, USER.md, MEMORY.md, memory/, skills/
@@ -67,6 +68,7 @@ The crontab, as a starting shape:
 
 ```cron
 */5  * * * *  /home/ichabod/bin/intake
+*/15 * * * *  /home/ichabod/bin/usage >> /home/ichabod/log/usage.jsonl
 */15 * * * *  /home/ichabod/bin/run-pass route
 */15 * * * *  /home/ichabod/bin/run-pass work
 0 4,11,18 * * *  /home/ichabod/bin/run-pass scout
@@ -101,6 +103,30 @@ exit $rc
 `flock -n` is the concurrency rule that `--max-starts 1` enforces today: if the previous run is still going, this one exits rather than stacking. `timeout` is the stall recovery that "a `running` card that has not moved in over an hour is stuck" currently handles by hand. `rc` is captured rather than allowed to abort under `set -e`, because a failed pass still has a log worth summarising.
 
 Two small follow-ups on the lock. A skipped run exits 1 and leaves an empty log, so `health` cannot tell it from a failure; `flock -n -E 75` and an early clean exit on 75 fixes that. And `intake` should take its own `intake.lock`, so a slow membrane call cannot overlap the next five-minute run and pick up the same message twice.
+
+### Measuring usage
+
+The subscription's limits show on chatgpt.com, which nothing on the box can read. Two numbers stand in for it:
+
+- **Tokens per run**, from Pi's own events into `log/cost.jsonl` above. This is how hard each run worked.
+- **Percent of the allowance used**, from `usage`, into `log/usage.jsonl` every fifteen minutes. This is how much room is left.
+
+`usage` asks the endpoint that the Pi extensions [`pi-codex-rate-limits`](https://github.com/scnewma/pi-codex-rate-limits) and [`pi-codex-limit`](https://pi.dev/packages/pi-codex-limit) call, with the same login Pi uses:
+
+```bash
+#!/usr/bin/env bash
+# usage   one JSON line: 5-hour and weekly percent used, and when the week resets
+set -euo pipefail
+# The auth.json key names are a guess; check them with `jq keys` before trusting this.
+token="$(jq -r '."openai-codex".access' /home/ichabod/.pi/agent/auth.json)"
+curl -sS --fail -H "Authorization: Bearer $token" https://chatgpt.com/backend-api/wham/usage |
+  jq -c '{at: (now | todate), limit_reached: .rate_limit.limit_reached,
+          five_hour: .rate_limit.primary_window.used_percent,
+          weekly: .rate_limit.secondary_window.used_percent,
+          weekly_resets: (.rate_limit.secondary_window.reset_at | todate)}'
+```
+
+The digest reports from both files, and `route` can run `usage` before dispatching self-directed work and hold off above a weekly threshold Zach picks. The endpoint is undocumented, so it can change without notice; `--fail` makes that an error `health` can see rather than a quiet gap in the log. The token Pi saves expires and Pi refreshes it only when it runs, so after a long idle stretch `usage` can fail once until the next pass.
 
 ### Which run mode, and why
 
@@ -217,7 +243,7 @@ Full destruction first, then a clean build. The repo is already trimmed (2026-09
 On the new instance, in rough order:
 
 - [ ] **Prove Pi.** Install `pi` as `ichabod`. Settle the run-mode flags and read one real `--mode json` stream for the actual `usage` field names. Run `scout.md` by hand and measure the preamble off the first usage event.
-- [ ] **Settle the allowance.** Log in to ChatGPT Plus on the box with Pi's device code login, and pick the models. Run the crontab for a day, then a day with dispatched workers, and check whether either hits the 5-hour or weekly limit — a pass is light, **workers on the strongest model are not**, and they are where the usage lives.
+- [ ] **Settle the allowance.** Log in to Ichabod's ChatGPT Plus account (`ichabod@ichabod-crane.net`) on the box with Pi's device code login, and pick the models. Prove `usage` works headless. Run the crontab for a day, then a day with dispatched workers, and check whether either hits the 5-hour or weekly limit — a pass is light, **workers on the strongest model are not**, and they are where the usage lives.
 - [ ] **The board.** Kanboard on the Synology at `ichabod-board.zfleeman.com`, with an `ichabod` user and its personal API token as `KANBOARD_TOKEN`, and columns triage, backlog, ready, running, review, blocked, done. `board` written, and `board createTask` works from inside Pi's `bash`. A nightly `board getAllTasks` dump committed into the workspace repo.
 - [ ] **`runtime/` in this repo:** `bin/`, `prompts/`, a crontab, and a deploy script. The old deploy's trick still works — SSM has no file copy, so ship a base64 tarball inside a run-command, built with `COPYFILE_DISABLE=1 tar --no-xattrs` so macOS metadata files stay out. `git show d005f4a:scripts/deploy-workspace` has it.
 - [ ] **`notify`,** proven by a real email arriving with the right envelope sender.

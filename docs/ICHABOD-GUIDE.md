@@ -43,7 +43,7 @@ Resize only on evidence: memory repeatedly above 85%, swap during ordinary work,
 | AWS | EC2, Elastic IP, DNS, budgets. Zach's, never on the box |
 | GitHub | `ich4bod`, the bot account Ichabod pushes to |
 | Email | `ichabod@ichabod-crane.net` on Fastmail |
-| Model provider | OpenAI, through a ChatGPT Plus subscription logged in with Pi |
+| Model provider | ChatGPT Plus on `ichabod@ichabod-crane.net`, logged in with Pi. Ichabod's own account, not Zach's |
 
 Passwords and recovery codes live in Zach's password manager, never on the instance.
 
