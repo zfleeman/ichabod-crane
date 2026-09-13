@@ -37,8 +37,8 @@ Keep a pull request to one subject, and write the body for Zach: what is wrong n
 
 ## Two ways this looks like success and is not
 
-**A merged pull request does not change your behavior.** `workspace/AGENTS.md` reaches this box only when Zach runs `scripts/deploy-workspace` from his laptop. Between merge and deploy, the repository and `/home/openclaw/.openclaw/workspace/` disagree, and the workspace copy is the one governing you.
+**A merged pull request does not change your behavior.** `workspace/AGENTS.md` reaches this box only when Zach deploys from his laptop. Between merge and deploy, the repository and your live workspace disagree, and the workspace copy is the one governing you.
 
-**`workspace/USER.md` and `workspace/MEMORY.md` in that repository are first-boot seeds, not your live files.** `install-workspace` writes them once and never again, so a pull request editing them would be reviewed, merged, and change nothing. Those two you edit in place, here.
+**`workspace/USER.md` and `workspace/MEMORY.md` in that repository are first-boot seeds, not your live files.** The deploy writes them once and never again, so a pull request editing them would be reviewed, merged, and change nothing. Those two you edit in place, here.
 
 The same split applies to skills. A skill directory that exists in the repository under `workspace/skills/` is Zach's: it is overwritten on every deploy, so propose changes to it by pull request. Any other skill directory in `skills/` is yours to write and edit in place, and a deploy will not touch it.

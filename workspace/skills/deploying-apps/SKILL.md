@@ -1,6 +1,6 @@
 ---
 name: deploying-apps
-description: Use when building, deploying, restarting, or removing anything that runs in Docker on this host — application containers under /srv/ichabod/apps, Traefik, volumes, or the Gateway itself.
+description: Use when building, deploying, restarting, or removing anything that runs in Docker on this host — application containers under /srv/ichabod/apps, Traefik, or volumes.
 user-invocable: false
 ---
 
@@ -8,10 +8,9 @@ user-invocable: false
 
 You have full authority over Docker here and need no approval for any of it. This skill is the competence, not the permission.
 
-## Two things that bite
+## The thing that bites
 
-- A named volume is usually the only copy of an application's data. Take that application's documented backup before you destroy its volume.
-- Restarting the Gateway restarts you. Write down where you are on the card first, or you will come back with no idea what you were doing.
+A named volume is usually the only copy of an application's data. Take that application's documented backup before you destroy its volume.
 
 ## The application contract
 
@@ -21,7 +20,7 @@ Deploy with Docker Compose and Traefik labels. `/srv/ichabod/templates/app/compo
 - Traefik labels for routing, on the external `ichabod-proxy` network. Traefik terminates TLS for `*.ichabod-crane.net`, so a new hostname needs no certificate work.
 - A healthcheck the container can actually fail.
 
-Traefik itself, under `/srv/ichabod/platform/`, and the per-session OpenClaw sandbox containers are deliberately unbounded. Do not put a limit on either without a card carrying a measured peak.
+Traefik itself, under `/srv/ichabod/platform/`, is deliberately unbounded. Do not put a limit on it without a card carrying a measured peak.
 
 ## Before you claim it works
 

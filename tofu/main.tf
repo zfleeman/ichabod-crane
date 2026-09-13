@@ -312,9 +312,9 @@ resource "aws_cloudwatch_metric_alarm" "ebs_byte_balance_low" {
   alarm_actions       = [aws_sns_topic.alerts.arn]
 }
 
-# The three CWAgent alarms sit in INSUFFICIENT_DATA until section 2 installs the
-# agent. Configure it to collect only "/" and to aggregate on InstanceId, or these
-# dimensions will not match.
+# The three CWAgent alarms sit in INSUFFICIENT_DATA until the host installs the
+# agent (docs/ICHABOD-GUIDE.md, section 5). Configure it to collect only "/" and
+# to aggregate on InstanceId, or these dimensions will not match.
 resource "aws_cloudwatch_metric_alarm" "memory_high" {
   alarm_name          = "ichabod-memory-high"
   alarm_description   = "Memory above 85 percent."

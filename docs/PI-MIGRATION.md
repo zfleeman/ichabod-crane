@@ -1,8 +1,26 @@
 # Migrating off OpenClaw
 
-The plan for replacing OpenClaw with Pi and cron. Written 2026-09-11, after [HARNESS-ALTERNATIVES.md](HARNESS-ALTERNATIVES.md) measured where the tokens go and [OPENCLAW-AND-PI.md](OPENCLAW-AND-PI.md) worked out how the two fit together. Those two are the reasoning; this is the build order.
+The plan for replacing OpenClaw with Pi and cron, written 2026-09-11 after a day of measuring where the tokens went.
 
-The goal is a box you can hold in your head: a handful of shell scripts, a crontab, prompt files, and `pi`. No Gateway, no TypeScript plugins, no `openclaw.json`, no Control UI. The [README's comparison table](../README.md#how-this-differs-from-the-clone-kit) currently describes a platform on one side and Rohrer's clone kit on the other, and this moves us most of the way toward the kit's column — deliberately, and with one exception.
+The goal is a box you can hold in your head: a handful of shell scripts, a crontab, prompt files, and `pi`. No Gateway, no TypeScript plugins, no `openclaw.json`, no Control UI. That moves us most of the way toward Rohrer's clone kit — deliberately, and with one exception.
+
+## Why
+
+Measured on the live box on 2026-09-11, from the transcripts' `prompt_snapshot` records. The director pass carried **38,831 tokens** before its first action, after two rounds of trimming from 61,122:
+
+| Component | Tokens |
+|---|---|
+| Anthropic's server-delivered Claude Code system prompt | ~12,700 |
+| Tool schemas: 6 native Claude Code tools + 14 OpenClaw tools bridged over MCP | ~16,800 |
+| Our prompt, `AGENTS.md`, and harness framing | ~9,300 |
+
+A third of that is not ours to control — the server prompt more than doubled overnight with no change on our side — and most of the rest is three tool surfaces stacked on one agent. Pi's pitch is the opposite: four tools and a system prompt under 1,000 tokens, with an estimated preamble around 3,500. That estimate has never been measured on our workload, which is what Phase 0 is for.
+
+Three findings from the same measurement still apply under Pi:
+
+- **Caching decides the bill more than preamble size does.** The API is stateless, so every turn re-sends the preamble, and prompt caching reads it back at 0.1x. But a cache write costs more than base input, and passes two hours apart were always cold: 61,082 tokens written, 0 read. Keep a pass's interval inside the cache TTL it writes, or it pays the write premium for a cache nothing reads.
+- **On an API key the currency changes.** One real day of traffic priced at list rates came to about $15/day on Sonnet 5 and $37/day on Opus 5, 95% of it cache reads. That was with the fat preamble, so it is an upper bound for the passes, not for the workers.
+- **Model by job.** A pass that routes and writes runs on Sonnet; a dispatched worker that builds gets Opus. Haiku was rejected for routing because triage is a judgment call on attacker-influenced text, and it fails destructively.
 
 ## Decisions already taken
 
@@ -106,6 +124,13 @@ Pi has four: interactive, print (`-p`), JSON (`--mode json`), and RPC (`--mode r
 
 **Verify the flag spelling in Phase 0.** An earlier draft of this document wrote `pi -p --mode json`. That is probably invalid, since `-p` is very likely shorthand for `--mode print`, in which case the two contradict and one wins silently. Confirm which before the wrapper is built on it.
 
+**Traps the old stack already paid for, in new hats:**
+
+- **Never pass a prompt through `sudo -iu`.** The `-i` login shell re-parses the command line, so a Markdown prompt has its backticks executed on the box. It happened once: a prompt ran `openclaw workboard dispatch` and baked the whole board into a job. Cron running as `ichabod` avoids `sudo` entirely; keep it that way.
+- **Make failure loud.** A pass that dies at line 2 and a pass with nothing to do look identical from outside. A stock heartbeat job once failed forty runs in a row unnoticed. That is what `health` is for, and it must shout when its own check breaks rather than go quiet.
+- **Make sure `timeout` kills Pi's children too.** `timeout` signals its direct child. A `bash` tool call that outlives it keeps running, and a runaway one keeps spending. Check this in Phase 0 and add `--kill-after` or a process-group kill if needed.
+- **Re-check the tool list after every Pi upgrade.** An allowlist that silently changes meaning is how OpenClaw's narrowed tool list swapped synchronous `Bash` for an async `exec` and a pass spent 14 turns in a sleep-and-poll loop.
+
 **Keep `route` and `work` separate at first, even though collapsing them is tempting.** `route.md` is `director.md` with the workboard commands swapped out, and that prompt is battle-tested — eight numbered steps refined against real failures. `work.md` is new. Merging them into one "read the board, do the next thing" loop is the genuinely Sammy-shaped end state and is probably right eventually, but it changes two things at once. Do it as a later simplification, once the substrate is proven, and do it because the separation turned out not to earn its keep rather than on principle.
 
 ## What replaces what
@@ -117,8 +142,8 @@ Pi has four: interactive, print (`-p`), JSON (`--mode json`), and RPC (`--mode r
 | Workboard | Kanboard, reached by a `board` shell wrapper over JSON-RPC | High. The API is plain HTTP |
 | `triage-guard` hook | The membrane's wrapper — it parses Pi's output and writes the card itself | High. Stronger than a hook |
 | Sandbox for `mail_reader` | Pi started with no tools, under `env -i` | High, and testable |
-| IMAP intake plugin | ~40 lines of Python `imaplib` in `intake` | High. It already does DMARC checks we can keep |
-| `smtp-send` plugin | ~20 lines of Python `smtplib` in `notify` | High |
+| IMAP intake plugin | ~40 lines of Python `imaplib` in `intake` | High. The gate's rules are in [MEMBRANE.md](MEMBRANE.md#step-1--fetch) |
+| `smtp-send` plugin | ~20 lines of Python `smtplib` in `notify` | High. Keep its rules: Zach is the only recipient, enforced in code; envelope sender and `From` both `ichabod@ichabod-crane.net`; retry `4xx`, stop on `5xx`; a per-hour send cap as a retry-loop backstop; the password redacted out of any error text |
 | `mailbox` plugin (search/archive) | The same script, more subcommands | High |
 | SecretRefs + secret store | `/srv/ichabod/env`, mode 0600 | High, and honest — see below |
 | Session ledger, token accounting | Pi's `--mode json` events, one file per run in `log/` | High. Better for forensics than today |
@@ -127,7 +152,7 @@ Pi has four: interactive, print (`-p`), JSON (`--mode json`), and RPC (`--mode r
 | Control UI | Kanboard's own UI for the board; `tail` and `jq` for everything else | Partial loss |
 | Multi-agent routing, `templates/new-agent` | A prompt file and a cron line | Simplification, not a loss |
 
-**On secrets, say the true thing.** The guide already concedes OpenClaw's store "is not an HSM: values are stored in its local SQLite state and protected by filesystem permissions." A 0600 file protected by filesystem permissions is the same security property with less machinery. What we actually lose is redaction — OpenClaw kept values out of model context by construction, and a shell-sourced env var is one `env` call away from a transcript. The mitigation is that `ichabod` is root-equivalent anyway and always was; the membrane, which is the user we do not trust, gets no keys at all.
+**On secrets, say the true thing.** OpenClaw's store was never an HSM: its values sat in local SQLite, protected by filesystem permissions. A 0600 file protected by filesystem permissions is the same security property with less machinery. What we actually lose is redaction — OpenClaw kept values out of model context by construction, and a shell-sourced env var is one `env` call away from a transcript. The mitigation is that `ichabod` is root-equivalent anyway and always was; the membrane, which is the user we do not trust, gets no keys at all.
 
 ## The board
 
@@ -204,7 +229,7 @@ The cost question is the one to be careful with. Zach has accepted an API key fo
 
 ### Phase 1 — Skeleton, nothing scheduled
 
-- [ ] `runtime/` in this repo: `bin/`, `prompts/`, a crontab template, a deploy script.
+- [ ] `runtime/` in this repo: `bin/`, `prompts/`, a crontab template, a deploy script. The old deploy's trick still works — SSM has no file copy, so ship a base64 tarball inside a run-command, built with `COPYFILE_DISABLE=1 tar --no-xattrs` so macOS metadata files stay out. `git show d005f4a:scripts/deploy-workspace` has it.
 - [ ] Deploy it alongside OpenClaw. Both stacks on the box, only one of them scheduled.
 - [ ] `notify` first, since the digest needs it, and it is the smallest end-to-end proof that the new stack can reach the outside world.
 - [ ] **Acceptance:** an email from `notify`, sent by cron, arriving with the right envelope sender.
@@ -238,13 +263,11 @@ The biggest single piece, and the point of no easy return.
 
 ### Phase 5 — Delete OpenClaw
 
-One commit, at the end, so the branch is additive until it isn't.
+The repo side is already done on this branch (2026-09-13): the plugins, the `scripts/configure-*` family and deploy scripts, the `mail_reader` workspace, the agent templates, the OpenClaw Makefile targets, and the OpenClaw-only documents are gone, and the guide and `workspace/` were trimmed to match. `git show d005f4a:<path>` recovers any of it. What is left is on the box.
 
 - [ ] Stop and disable the Gateway. Uninstall.
-- [ ] Delete `plugins/`, `scripts/configure-*`, `scripts/install-plugin`, `scripts/build-sandbox-image`, the `sync`/`imap`/`plugins`/`ui`/`openclaw` Makefile targets.
-- [ ] Rewrite `README.md` and `docs/ICHABOD-GUIDE.md`. Most of the guide's hard-won OpenClaw lessons stop applying and should be cut, not archived in place — `git log` is the archive.
-- [ ] Rewrite `workspace/AGENTS.md`: no Workboard cards, no Gateway restarts, no `openclaw` authority language.
-- [ ] Delete the `openclaw` user, and the `triage-guard` plugin with it — it has no job left.
+- [ ] Delete the `openclaw` user.
+- [ ] Finish `workspace/AGENTS.md` against the real stack: the journal rules and anything else Phase 3 made obsolete.
 
 ### Phase 6 — Reap
 
@@ -254,8 +277,7 @@ One commit, at the end, so the branch is additive until it isn't.
 ## Branch discipline
 
 - `zf/pi-migration` off `main`, long-lived, merged once at the end.
-- **Additive until Phase 5.** Nothing is deleted while the old stack is still the one serving. That keeps the diff reviewable and every phase revertible with one deploy.
-- Land the two memos on `main` first, in their own small PR, so this branch is only the build.
+- **The repo was trimmed up front; the box was not.** OpenClaw's code is gone from this branch but still on `main`, so the running box is operated from a `main` checkout until cutover. Nothing on the box is deleted before Phase 5.
 - Both stacks coexist on the box the whole time, under different Unix users. Cutover is per pass, by moving one cron line, never by flipping the machine.
 - Each phase is its own commit with its acceptance evidence in the message.
 
@@ -265,7 +287,7 @@ One commit, at the end, so the branch is additive until it isn't.
 - Model fallback. A provider outage becomes a failed pass rather than a slower one.
 - Typed plugin surfaces. Everything becomes shell and Python, which is easier to read and easier to get subtly wrong.
 - The multi-agent story. `templates/new-agent` and "agents Ichabod creates himself" become "another prompt file and another cron line" — smaller, and less interesting.
-- OpenClaw's own operational knowledge, most of `docs/ICHABOD-GUIDE.md`, several weeks of it hard-won.
+- OpenClaw's own operational knowledge, several weeks of it hard-won. It was cut from this branch rather than archived in place; `git log` on `main` has it.
 
 ## What gets simpler
 
