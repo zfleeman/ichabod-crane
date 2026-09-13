@@ -113,7 +113,7 @@ Pi has four: interactive, print (`-p`), JSON (`--mode json`), and RPC (`--mode r
 | OpenClaw provides | Replacement | Confidence |
 |---|---|---|
 | Scheduler (`automations`) | cron + `flock` + `timeout` | High. This is cron's actual job |
-| Agent loop, context assembly | `pi -p` | High, pending Phase 0 |
+| Agent loop, context assembly | `pi --mode json` | High, pending Phase 0 |
 | Workboard | Kanboard, reached by a `board` shell wrapper over JSON-RPC | High. The API is plain HTTP |
 | `triage-guard` hook | The membrane's wrapper — it parses Pi's output and writes the card itself | High. Stronger than a hook |
 | Sandbox for `mail_reader` | Pi started with no tools, under `env -i` | High, and testable |
@@ -280,6 +280,5 @@ One commit, at the end, so the branch is additive until it isn't.
 
 - Can Pi use the Claude subscription, or is this API-key-only? Phase 0, and it sets the budget.
 - What do dispatched workers cost on an API key? The passes are cheap and the workers are not, and only the workers are unbounded.
-- Does Kanboard-on-the-box hold up, or does the board want to live somewhere a `tofu` rebuild cannot take with it?
 - Is one Kanboard project with columns enough, or does the router want swimlanes per kind of work?
 - Does `route`/`work` need to stay split? Answerable only after Phase 3 has run for a while.

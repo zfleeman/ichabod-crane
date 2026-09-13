@@ -37,6 +37,11 @@ data "aws_route53_zone" "ichabod" {
   name = "ichabod-crane.net"
 }
 
+# Zach's personal zone, also created by hand. Read only for the board record below.
+data "aws_route53_zone" "zfleeman" {
+  name = "zfleeman.com"
+}
+
 # --- Network -----------------------------------------------------------------
 
 resource "aws_security_group" "ichabod" {
@@ -189,6 +194,16 @@ resource "aws_route53_record" "wildcard" {
   type    = "A"
   ttl     = 300
   records = [aws_eip.ichabod.public_ip]
+}
+
+# The board runs on Zach's Synology, not on this box. Only this record is managed
+# here; the rest of the zfleeman.com zone is kept by hand.
+resource "aws_route53_record" "board" {
+  zone_id = data.aws_route53_zone.zfleeman.zone_id
+  name    = "ichabod-board.zfleeman.com"
+  type    = "CNAME"
+  ttl     = 300
+  records = ["zfleeman.synology.me"]
 }
 
 # Mail, all of it Fastmail's. These were created by hand in the console during
