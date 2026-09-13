@@ -16,11 +16,11 @@ Measured on the live box on 2026-09-11, from the transcripts' `prompt_snapshot` 
 
 A third of that is not ours to control — the server prompt more than doubled overnight with no change on our side — and most of the rest is three tool surfaces stacked on one agent. Pi's pitch is the opposite: four tools and a system prompt under 1,000 tokens, with an estimated preamble around 3,500. That estimate has never been measured on our workload, which is the first thing to do before merging.
 
-Three findings from the same measurement still apply under Pi:
+The new stack runs on OpenAI models. The measurements above were taken on Anthropic's, so three findings carry over as lessons rather than numbers:
 
-- **Caching decides the bill more than preamble size does.** The API is stateless, so every turn re-sends the preamble, and prompt caching reads it back at 0.1x. But a cache write costs more than base input, and passes two hours apart were always cold: 61,082 tokens written, 0 read. Keep a pass's interval inside the cache TTL it writes, or it pays the write premium for a cache nothing reads.
-- **On an API key the currency changes.** One real day of traffic priced at list rates came to about $15/day on Sonnet 5 and $37/day on Opus 5, 95% of it cache reads. That was with the fat preamble, so it is an upper bound for the passes, not for the workers.
-- **Model by job.** A pass that routes and writes runs on Sonnet; a dispatched worker that builds gets Opus. Haiku was rejected for routing because triage is a judgment call on attacker-influenced text, and it fails destructively.
+- **Caching decides the bill more than preamble size does.** The API is stateless, so every turn re-sends the preamble, and only a cache hit makes that cheap. Passes two hours apart were always cold on the old stack: 61,082 tokens written, 0 read. OpenAI caches automatically without charging extra to write, but the cache still expires, so a pass that runs rarely pays full price for its preamble every time.
+- **Cache reads are most of the bill.** One real day of old-stack traffic priced at Anthropic list rates came to $15–37/day, 95% of it cache reads. Re-price on OpenAI before trusting any figure.
+- **Model by job.** A pass that routes and writes runs on a mid-tier model; a dispatched worker that builds gets the strongest one. The smallest tier was rejected for routing because triage is a judgment call on attacker-influenced text, and it fails destructively.
 
 ## Decisions already taken
 
@@ -35,7 +35,7 @@ Settled, so the build list below reads as work rather than as options. The reaso
 | The membrane runs as `ichabod`, not as a user of its own | [MEMBRANE.md](MEMBRANE.md) |
 | The OpenClaw instance is destroyed outright and a fresh one built from `tofu/`. Nothing on it is kept, and the two stacks never run side by side | [Teardown](#teardown) |
 
-Still open: whether Pi can use the Claude subscription or this is API-key-only, and what dispatched workers cost on an API key. Answer both before merging.
+Still open: which OpenAI models fill each job, whether Pi can use a ChatGPT subscription or this is API-key-only, and what dispatched workers cost on an API key. Answer all three before merging.
 
 ## The one thing that must not regress
 
@@ -218,7 +218,7 @@ Full destruction first, then a clean build. The repo is already trimmed (2026-09
 On the new instance, in rough order:
 
 - [ ] **Prove Pi.** Install `pi` as `ichabod`. Settle the run-mode flags and read one real `--mode json` stream for the actual `usage` field names. Run `scout.md` by hand and measure the preamble off the first usage event.
-- [ ] **Settle the money.** Can Pi use the Claude subscription, or is this API-key-only? Price one real pass, then the crontab above, then a day of dispatched workers separately — a pass is cheap, **workers on Opus are not**, and they are where the volume lives.
+- [ ] **Settle the money.** Pick the OpenAI models. Can Pi use a ChatGPT subscription, or is this API-key-only? Price one real pass, then the crontab above, then a day of dispatched workers separately — a pass is cheap, **workers on the strongest model are not**, and they are where the volume lives.
 - [ ] **The board.** Kanboard on the Synology at `ichabod-board.zfleeman.com`, with an `ichabod` user and its personal API token as `KANBOARD_TOKEN`, and columns triage, backlog, ready, running, review, blocked, done. `board` written, and `board createTask` works from inside Pi's `bash`. A nightly `board getAllTasks` dump committed into the workspace repo.
 - [ ] **`runtime/` in this repo:** `bin/`, `prompts/`, a crontab, and a deploy script. The old deploy's trick still works — SSM has no file copy, so ship a base64 tarball inside a run-command, built with `COPYFILE_DISABLE=1 tar --no-xattrs` so macOS metadata files stay out. `git show d005f4a:scripts/deploy-workspace` has it.
 - [ ] **`notify`,** proven by a real email arriving with the right envelope sender.
@@ -254,7 +254,7 @@ On the new instance, in rough order:
 
 ## Open questions
 
-- Can Pi use the Claude subscription, or is this API-key-only? It sets the budget.
+- Which OpenAI model does each job, and can Pi use a ChatGPT subscription or is this API-key-only? Together they set the budget.
 - What do dispatched workers cost on an API key? The passes are cheap and the workers are not, and only the workers are unbounded.
 - Is one Kanboard project with columns enough, or does the router want swimlanes per kind of work?
 - Does `route`/`work` need to stay split? Answerable only after it has run for a while.
