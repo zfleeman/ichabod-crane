@@ -14,7 +14,7 @@ Measured on the live box on 2026-09-11, from the transcripts' `prompt_snapshot` 
 | Tool schemas: 6 native Claude Code tools + 14 OpenClaw tools bridged over MCP | ~16,800 |
 | Our prompt, `AGENTS.md`, and harness framing | ~9,300 |
 
-A third of that is not ours to control — the server prompt more than doubled overnight with no change on our side — and most of the rest is three tool surfaces stacked on one agent. Pi's pitch is the opposite: four tools and a system prompt under 1,000 tokens, with an estimated preamble around 3,500. That estimate has never been measured on our workload, which is what Phase 0 is for.
+A third of that is not ours to control — the server prompt more than doubled overnight with no change on our side — and most of the rest is three tool surfaces stacked on one agent. Pi's pitch is the opposite: four tools and a system prompt under 1,000 tokens, with an estimated preamble around 3,500. That estimate has never been measured on our workload, which is the first thing to do before merging.
 
 Three findings from the same measurement still apply under Pi:
 
@@ -24,7 +24,7 @@ Three findings from the same measurement still apply under Pi:
 
 ## Decisions already taken
 
-Settled, so that the phases below read as work rather than as options. The reasoning for each is in the section it belongs to.
+Settled, so the build list below reads as work rather than as options. The reasoning for each is in the section it belongs to.
 
 | Decision | Where |
 |---|---|
@@ -33,25 +33,19 @@ Settled, so that the phases below read as work rather than as options. The reaso
 | The agent reaches the board through a `board` shell wrapper, **not** MCP | [The board](#the-board) |
 | The mail membrane keeps its boundary, rebuilt around a tool-less reader | [MEMBRANE.md](MEMBRANE.md) |
 | The membrane runs as `ichabod`, not as a user of its own | [MEMBRANE.md](MEMBRANE.md) |
-| Nothing on the box is deleted until Phase 5 | [Branch discipline](#branch-discipline) |
+| Merging this branch to `main` is the cutover. No period of running both stacks | [Cutover](#cutover) |
 
-Still open, and gating: whether Pi can use the Claude subscription or this is API-key-only, and what dispatched workers cost on an API key. Phase 0 answers both.
+Still open: whether Pi can use the Claude subscription or this is API-key-only, and what dispatched workers cost on an API key. Answer both before merging.
 
 ## The one thing that must not regress
 
 The exception is the trust boundary. The README says it plainly: **the kit optimizes for never stopping, and this project optimizes for never trusting the input.** Simplifying the machinery is the whole point of this migration; dropping the membrane is not part of it, and a version of this plan that quietly loses it is a failure even if every pass runs.
 
-The good news is that it should get *stronger*. Every sandbox failure this project has recorded was the same shape: config declared a boundary that nothing enforced, and the tool that reports on it lied. `sandbox explain` printed `runtime: sandboxed` for a reader that had a shell, Docker, and the network. Under Pi the membrane stops being a config assertion and becomes a Unix one — a separate user with no credentials, running a process started with no tools. That is a claim you verify by trying to break it, which is the only kind of verification this project has found reliable.
-
-## The gate before anything else
-
-**Do not start Phase 1 until Phase 0 answers two questions.** Everything below assumes Pi can do the work and that we can afford it, and neither is established.
-
-Nothing in this plan is expensive to abandon at Phase 0. Everything after it is.
+The good news is that it should get *stronger*. Every sandbox failure this project has recorded was the same shape: config declared a boundary that nothing enforced, and the tool that reports on it lied. `sandbox explain` printed `runtime: sandboxed` for a reader that had a shell, Docker, and the network. Under Pi the membrane stops being a config assertion and becomes a process one — started with no tools and an empty environment. That is a claim you verify by trying to break it, which is the only kind of verification this project has found reliable.
 
 ## Target architecture
 
-One box, three Unix users, five scripts, one crontab.
+One box, one Unix user, five scripts, one crontab.
 
 ```
 /srv/ichabod/
@@ -68,12 +62,7 @@ One box, three Unix users, five scripts, one crontab.
   env             0600, the API keys, sourced by the wrappers
 ```
 
-| User | Runs | Has |
-|---|---|---|
-| `ichabod` | every pass, every worker, and the membrane wrapper | Docker, `gh`, the API keys, the mailbox, sudo where it already has it |
-| `openclaw` | nothing, once this is done | deleted at the end |
-
-The membrane runs as `ichabod` rather than as a user of its own — see [The membrane, rebuilt](#the-membrane-rebuilt) for what that costs and how the isolation is kept anyway.
+`ichabod` runs every pass, every worker, and the membrane wrapper, and holds Docker, `gh`, the API keys and the mailbox. The membrane runs as `ichabod` rather than as a user of its own — see [MEMBRANE.md](MEMBRANE.md#what-we-deliberately-gave-up) for what that costs and how the isolation is kept anyway.
 
 The crontab, as a starting shape:
 
@@ -103,7 +92,7 @@ flock -n "/run/ichabod/$name.lock" \
      @"/srv/ichabod/prompts/$name.md" > "$out" || rc=$?
 
 # The number this whole migration is about, one line per pass. Field names are
-# a guess until Phase 0 reads a real event; do not trust this jq as written.
+# a guess until someone reads a real event; do not trust this jq as written.
 jq -s '[.[] | .usage // empty] | {pass: "'"$name"'",
        in: (map(.input_tokens) | add), out: (map(.output_tokens) | add)}' \
   "$out" >> /srv/ichabod/log/cost.jsonl
@@ -120,15 +109,15 @@ Pi has four: interactive, print (`-p`), JSON (`--mode json`), and RPC (`--mode r
 
 **The membrane uses `-p`.** Its contract is four fields of JSON validated by the wrapper. Under `--mode json` the wrapper would have to pull the assistant text out of an event envelope and then parse that — two parsers on the one path where hostile input arrives, which is the wrong place to add surface. Its token usage does not need measuring either. One trap to handle in `intake`: models commonly wrap JSON output in Markdown fences, so strip fences before parsing rather than assuming a bare object.
 
-**Nothing uses RPC.** RPC holds a live session and exposes `prompt`, `steer`, `follow_up`, `abort` and `get_state` over line-delimited JSON on stdin. That is for an orchestrator that wants to intervene mid-turn. Our passes are fire-and-forget — cron starts them, they finish or time out, and there is nothing to steer. Adopting it means writing a client that owns process lifecycle and framing, which is a daemon, which is the category of machinery we are removing OpenClaw to be rid of. It becomes worth revisiting only if a pass needs to be interruptible, or if `route` and `work` collapse into one long-lived loop — a Phase 6 question.
+**Nothing uses RPC.** RPC holds a live session and exposes `prompt`, `steer`, `follow_up`, `abort` and `get_state` over line-delimited JSON on stdin. That is for an orchestrator that wants to intervene mid-turn. Our passes are fire-and-forget — cron starts them, they finish or time out, and there is nothing to steer. Adopting it means writing a client that owns process lifecycle and framing, which is a daemon, which is the category of machinery we are removing OpenClaw to be rid of. It becomes worth revisiting only if a pass needs to be interruptible, or if `route` and `work` collapse into one long-lived loop — a question for later.
 
-**Verify the flag spelling in Phase 0.** An earlier draft of this document wrote `pi -p --mode json`. That is probably invalid, since `-p` is very likely shorthand for `--mode print`, in which case the two contradict and one wins silently. Confirm which before the wrapper is built on it.
+**Verify the flag spelling before building on it.** An earlier draft of this document wrote `pi -p --mode json`. That is probably invalid, since `-p` is very likely shorthand for `--mode print`, in which case the two contradict and one wins silently. Confirm which before the wrapper is built on it.
 
 **Traps the old stack already paid for, in new hats:**
 
 - **Never pass a prompt through `sudo -iu`.** The `-i` login shell re-parses the command line, so a Markdown prompt has its backticks executed on the box. It happened once: a prompt ran `openclaw workboard dispatch` and baked the whole board into a job. Cron running as `ichabod` avoids `sudo` entirely; keep it that way.
 - **Make failure loud.** A pass that dies at line 2 and a pass with nothing to do look identical from outside. A stock heartbeat job once failed forty runs in a row unnoticed. That is what `health` is for, and it must shout when its own check breaks rather than go quiet.
-- **Make sure `timeout` kills Pi's children too.** `timeout` signals its direct child. A `bash` tool call that outlives it keeps running, and a runaway one keeps spending. Check this in Phase 0 and add `--kill-after` or a process-group kill if needed.
+- **Make sure `timeout` kills Pi's children too.** `timeout` signals its direct child. A `bash` tool call that outlives it keeps running, and a runaway one keeps spending. Check this before merging and add `--kill-after` or a process-group kill if needed.
 - **Re-check the tool list after every Pi upgrade.** An allowlist that silently changes meaning is how OpenClaw's narrowed tool list swapped synchronous `Bash` for an async `exec` and a pass spent 14 turns in a sleep-and-poll loop.
 
 **Keep `route` and `work` separate at first, even though collapsing them is tempting.** `route.md` is `director.md` with the workboard commands swapped out, and that prompt is battle-tested — eight numbered steps refined against real failures. `work.md` is new. Merging them into one "read the board, do the next thing" loop is the genuinely Sammy-shaped end state and is probably right eventually, but it changes two things at once. Do it as a later simplification, once the substrate is proven, and do it because the separation turned out not to earn its keep rather than on principle.
@@ -138,7 +127,7 @@ Pi has four: interactive, print (`-p`), JSON (`--mode json`), and RPC (`--mode r
 | OpenClaw provides | Replacement | Confidence |
 |---|---|---|
 | Scheduler (`automations`) | cron + `flock` + `timeout` | High. This is cron's actual job |
-| Agent loop, context assembly | `pi --mode json` | High, pending Phase 0 |
+| Agent loop, context assembly | `pi --mode json` | High, pending a measured pass |
 | Workboard | Kanboard, reached by a `board` shell wrapper over JSON-RPC | High. The API is plain HTTP |
 | `triage-guard` hook | The membrane's wrapper — it parses Pi's output and writes the card itself | High. Stronger than a hook |
 | Sandbox for `mail_reader` | Pi started with no tools, under `env -i` | High, and testable |
@@ -212,74 +201,32 @@ The gain over today is that the model stops making a tool call and starts fillin
 
 Zach chose to run this as `ichabod` rather than as a credential-free user of its own. MEMBRANE.md records exactly what that costs and the three flags that buy most of it back.
 
-## Phases
+## Before merging
 
-Each phase ends in a state the box can sit in indefinitely. Nothing after Phase 0 is a big-bang cutover.
+No phases. This branch merges when the box can run on it, and merging is the switch. In rough build order:
 
-### Phase 0 — Prove it, change nothing
+- [ ] **Prove Pi.** Install `pi` as `ichabod`. Settle the run-mode flags and read one real `--mode json` stream for the actual `usage` field names. Run `scout.md` by hand and measure the preamble off the first usage event.
+- [ ] **Settle the money.** Can Pi use the Claude subscription, or is this API-key-only? Price one real pass, then the crontab above, then a day of dispatched workers separately — a pass is cheap, **workers on Opus are not**, and they are where the volume lives.
+- [ ] **The board.** Kanboard on the Synology at `ichabod-board.zfleeman.com` with columns triage, backlog, ready, running, review, blocked, done. `board` written, and `board createTask` works from inside Pi's `bash`. A nightly `board getAllTasks` dump committed into the workspace repo.
+- [ ] **`runtime/` in this repo:** `bin/`, `prompts/`, a crontab, and a deploy script. The old deploy's trick still works — SSM has no file copy, so ship a base64 tarball inside a run-command, built with `COPYFILE_DISABLE=1 tar --no-xattrs` so macOS metadata files stay out. `git show d005f4a:scripts/deploy-workspace` has it.
+- [ ] **`notify`,** proven by a real email arriving with the right envelope sender.
+- [ ] **Prompts.** Port `scout.md` and `digest.md`. Rewrite `director.md` into `route.md` against `board` — the projection one-liner and the twin-card retirement both disappear, since Kanboard returns small results and tasks can be edited in place. Write `work.md`: take the top `ready` task, do it, comment what happened, move the column. Reasoning goes on the card as a comment, so most of `memory/YYYY-MM-DD/` stops existing.
+- [ ] **The membrane.** `MEMBRANE_KEY` as a second API key with its own spend cap. `intake` and `membrane.md` built to [MEMBRANE.md](MEMBRANE.md), and all four of [its tests](MEMBRANE.md#how-to-test-it) passing — injection, credentials, malformed output, and a normal request. Not three.
+- [ ] **`health`,** and a check that it shouts when a pass has not succeeded.
+- [ ] **`workspace/AGENTS.md`** finished against the real stack, including the journal rules the board made obsolete.
 
-- [ ] Install `pi` on the box as a new `ichabod` user. OpenClaw keeps running untouched.
-- [ ] Settle the run-mode flags. Confirm whether `-p` and `--mode json` can be combined, and read one real event stream to get the actual `usage` field names before the `pass` wrapper's `jq` is written.
-- [ ] Run `scout.md` under `pi --mode json` by hand. Measure the preamble off the first usage event.
-- [ ] Stand up Kanboard on the Synology, behind the existing reverse proxy, at `ichabod-board.zfleeman.com`, and write `board`. Confirm the round-trip: `board createTask` from inside Pi's `bash`, as `ichabod`.
-- [ ] Establish the model and the currency. Can Pi use the Claude subscription, or is this API-key-only? Price one real pass, then multiply by the crontab above and by a day of dispatched workers.
-- [ ] **Gate:** a measured preamble well under 38,831, a real card created through `board`, and a daily cost Zach has looked at and accepted. If any one fails, stop and keep OpenClaw.
+## Cutover
 
-The cost question is the one to be careful with. Zach has accepted an API key for a pass, and a pass is cheap. **Dispatched workers on Opus are not**, and they are where the token volume actually lives. Price those separately before committing.
+`zf/pi-migration` merges to `main` once, and that is the cutover. The repo is already trimmed (2026-09-13); `git show d005f4a:<path>` recovers anything OpenClaw-era. On the box, at merge:
 
-### Phase 1 — Skeleton, nothing scheduled
+- [ ] Stop and disable the Gateway, uninstall OpenClaw, and delete the `openclaw` user. Nothing on it is being preserved.
+- [ ] Deploy `runtime/`, provision `/srv/ichabod/env`, install the crontab.
+- [ ] Email Ichabod a small request and watch it go from intake to a reply.
 
-- [ ] `runtime/` in this repo: `bin/`, `prompts/`, a crontab template, a deploy script. The old deploy's trick still works — SSM has no file copy, so ship a base64 tarball inside a run-command, built with `COPYFILE_DISABLE=1 tar --no-xattrs` so macOS metadata files stay out. `git show d005f4a:scripts/deploy-workspace` has it.
-- [ ] Deploy it alongside OpenClaw. Both stacks on the box, only one of them scheduled.
-- [ ] `notify` first, since the digest needs it, and it is the smallest end-to-end proof that the new stack can reach the outside world.
-- [ ] **Acceptance:** an email from `notify`, sent by cron, arriving with the right envelope sender.
+## Later
 
-### Phase 2 — Move the read-only passes
-
-Scout and digest. They read and report; if they break, nothing is lost and you find out in a day.
-
-- [ ] Port `scout.md` and `digest.md` to the new prompts directory.
-- [ ] Remove the OpenClaw jobs for both, add the cron lines.
-- [ ] Run for three days next to an untouched director.
-- [ ] **Acceptance:** three digests, three days of scout sweeps, no silent skips. Compare per-pass cost against Phase 0's estimate.
-
-### Phase 3 — The board
-
-The biggest single piece, and the point of no easy return.
-
-- [ ] Kanboard is already up from Phase 0. Define the swimlanes and columns to match today's statuses: triage, backlog, ready, running, review, blocked, done.
-- [ ] Add the nightly `board getAllTasks` dump, committed into the workspace repo.
-- [ ] Migrate live cards. Everything not `done` becomes a Kanboard task; `done` cards export to one file and are dropped.
-- [ ] Rewrite `director.md` into `route.md` against `board`. Steps 2, 4, 5 and 6 get shorter; step 1's projection one-liner and step 7's twin-retirement both disappear, since Kanboard returns small results and tasks can be edited in place.
-- [ ] Move the journal onto the card. Kanboard tasks take comments, so most of `memory/YYYY-MM-DD/` stops existing and the passes stop reading it.
-- [ ] Write `work.md` — take the top `ready` task, do it, comment what happened, move the column.
-- [ ] **Acceptance:** a week of routing and one real card taken from `triage` to `done` entirely on the new stack, with the reasoning readable on the card rather than in the journal.
-
-### Phase 4 — The membrane
-
-- [ ] Provision `MEMBRANE_KEY` as a second API key with its own spend cap.
-- [ ] Build `intake` and `membrane.md` to the spec in [MEMBRANE.md](MEMBRANE.md), including the flag comment it asks for.
-- [ ] **Acceptance:** all four tests in [MEMBRANE.md](MEMBRANE.md#how-to-test-it) — injection, credentials, malformed output, and a normal request. Turn off OpenClaw's IMAP account only after all four pass, not three.
-
-### Phase 5 — Delete OpenClaw
-
-The repo side is already done on this branch (2026-09-13): the plugins, the `scripts/configure-*` family and deploy scripts, the `mail_reader` workspace, the agent templates, the OpenClaw Makefile targets, and the OpenClaw-only documents are gone, and the guide and `workspace/` were trimmed to match. `git show d005f4a:<path>` recovers any of it. What is left is on the box.
-
-- [ ] Stop and disable the Gateway. Uninstall.
-- [ ] Delete the `openclaw` user.
-- [ ] Finish `workspace/AGENTS.md` against the real stack: the journal rules and anything else Phase 3 made obsolete.
-
-### Phase 6 — Reap
-
-- [ ] Re-check the instance type. `t3a.large` was sized for a Node Gateway, a sandbox image, and Docker. Two of those are gone.
-- [ ] Fold `route` and `work` into one loop if the separation has not earned itself.
-
-## Branch discipline
-
-- `zf/pi-migration` off `main`, long-lived, merged once at the end.
-- **The repo was trimmed up front; the box was not.** OpenClaw's code is gone from this branch but still on `main`, so the running box is operated from a `main` checkout until cutover. Nothing on the box is deleted before Phase 5.
-- Both stacks coexist on the box the whole time, under different Unix users. Cutover is per pass, by moving one cron line, never by flipping the machine.
-- Each phase is its own commit with its acceptance evidence in the message.
+- Re-check the instance type. `t3a.large` was sized for a Node Gateway, a sandbox image, and Docker. Two of those are gone.
+- Fold `route` and `work` into one loop if the separation has not earned itself.
 
 ## What we lose, stated plainly
 
@@ -287,7 +234,7 @@ The repo side is already done on this branch (2026-09-13): the plugins, the `scr
 - Model fallback. A provider outage becomes a failed pass rather than a slower one.
 - Typed plugin surfaces. Everything becomes shell and Python, which is easier to read and easier to get subtly wrong.
 - The multi-agent story. `templates/new-agent` and "agents Ichabod creates himself" become "another prompt file and another cron line" — smaller, and less interesting.
-- OpenClaw's own operational knowledge, several weeks of it hard-won. It was cut from this branch rather than archived in place; `git log` on `main` has it.
+- OpenClaw's own operational knowledge, several weeks of it hard-won. It was cut rather than archived in place; `git log` has it.
 
 ## What gets simpler
 
@@ -300,7 +247,7 @@ The repo side is already done on this branch (2026-09-13): the plugins, the `scr
 
 ## Open questions
 
-- Can Pi use the Claude subscription, or is this API-key-only? Phase 0, and it sets the budget.
+- Can Pi use the Claude subscription, or is this API-key-only? It sets the budget.
 - What do dispatched workers cost on an API key? The passes are cheap and the workers are not, and only the workers are unbounded.
 - Is one Kanboard project with columns enough, or does the router want swimlanes per kind of work?
-- Does `route`/`work` need to stay split? Answerable only after Phase 3 has run for a while.
+- Does `route`/`work` need to stay split? Answerable only after it has run for a while.

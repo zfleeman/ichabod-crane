@@ -8,9 +8,9 @@ Inspired by Jason Rohrer's autonomous AI project, whose clone kit — written by
 
 Zach sends an email. A reader with no tools turns it into a card on a board. The main agent picks the card up, does the work on the host, and replies. Nothing else can talk to it.
 
-## Where it is
+## Why Pi
 
-**This branch is the move off OpenClaw onto Pi and cron**, and the OpenClaw machinery has already been removed from it. The box itself still runs the OpenClaw stack, deployed from `main`, until the new stack passes its acceptance tests. The plan and build order are [docs/PI-MIGRATION.md](docs/PI-MIGRATION.md).
+**Ichabod runs on Pi and cron.** It used to run on OpenClaw; merging the migration branch is the cutover, and the plan is [docs/PI-MIGRATION.md](docs/PI-MIGRATION.md).
 
 The short reason: a routing pass under OpenClaw carried 38,831 tokens of preamble before it did anything, about a third of which was not ours to control and roughly half of the rest tool schemas. Pi is four tools and a short system prompt, driven from a crontab.
 
