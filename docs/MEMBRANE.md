@@ -77,7 +77,7 @@ It pipes the body into Pi, started like this:
 
 ```bash
 printf '%s' "$body" | env -i HOME=/tmp PATH=/usr/bin \
-  OPENAI_API_KEY="$MEMBRANE_KEY" \
+  PI_CODING_AGENT_DIR=/home/ichabod/.pi/agent \
   pi -p --tools "" --no-session --no-context-files \
      @/home/ichabod/prompts/membrane.md
 ```
@@ -122,7 +122,7 @@ Every flag in step 2 is load-bearing. If you are editing `intake` and one of the
 |---|---|---|
 | `--tools ""` | Gives the reader no tools at all | The reader can act. This is the whole boundary; nothing else matters if this is gone |
 | `env -i` | Starts the process with an empty environment, then adds back only what is listed | The reader inherits `GH_TOKEN`, `KANBOARD_TOKEN` and `IMAP_PASSWORD` from the sourced env file |
-| `MEMBRANE_KEY` | A **second** API key, separate from the agent's, with its own spend cap | A leaked or runaway reader spends against the key the whole box runs on |
+| `PI_CODING_AGENT_DIR` | Points Pi at the ChatGPT login in `~/.pi/agent/auth.json`, the only credential the reader gets | With `HOME=/tmp` the reader finds no login and every message fails. Keep Pi extensions out of that directory, because an extension can add tools |
 | `--no-context-files` | Stops Pi loading `AGENTS.md` and `CLAUDE.md` | The reader is handed a description of exactly what authority Ichabod has, which is the map an attacker wants |
 | `--no-session` | Writes no transcript to `~/.pi/agent/sessions/` | Hostile text accumulates in a second store that nothing prunes or backs up |
 
@@ -134,7 +134,7 @@ An earlier draft ran the reader as its own Unix user, `ichabod-mail`, with no cr
 
 That is a reasonable trade and it is worth knowing precisely what it costs. **The isolation that matters is unchanged** — a process with no tools cannot act, no matter whose login it runs under. What the second user bought was protection against a *future* change: the day someone adds a tool "just for debugging," a reader with its own credential-free login would still have had nothing worth stealing, and this one is running beside the keys.
 
-`env -i` plus a separate capped key covers most of that. The residual risk is not in today's code, it is in tomorrow's edit, which is why the rules below exist.
+`env -i` covers most of that. The residual risk is not in today's code, it is in tomorrow's edit, which is why the rules below exist.
 
 ## How to test it
 

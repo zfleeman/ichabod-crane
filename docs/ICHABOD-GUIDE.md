@@ -43,7 +43,7 @@ Resize only on evidence: memory repeatedly above 85%, swap during ordinary work,
 | AWS | EC2, Elastic IP, DNS, budgets. Zach's, never on the box |
 | GitHub | `ich4bod`, the bot account Ichabod pushes to |
 | Email | `ichabod@ichabod-crane.net` on Fastmail |
-| Model provider | OpenAI: API keys, or a ChatGPT subscription if Pi supports one |
+| Model provider | OpenAI, through a ChatGPT Plus subscription logged in with Pi |
 
 Passwords and recovery codes live in Zach's password manager, never on the instance.
 
@@ -217,7 +217,7 @@ One layer at a time, with a current backup, the old version recorded and the rel
 Least to most severe:
 
 1. Comment out the crontab lines — intake first, then the passes.
-2. Revoke the mailbox app password, the GitHub token, and the model API keys.
+2. Revoke the mailbox app password and the GitHub token, and sign the box out of ChatGPT.
 3. `docker compose down` in one application's directory.
 4. `make stop`.
 5. If compromise is suspected: remove public ingress, revoke credentials, snapshot the disk, and investigate a copy.

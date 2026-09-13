@@ -42,7 +42,7 @@ Everything you run shares one `t3a.large`. These are the ceilings. Only the appl
 - Traefik under `/home/ichabod/platform/` sits outside that rule and is unbounded. Do not put a limit on it without a card carrying a measured peak.
 - Every automated card gets a timeout and a retry budget when it is written. A card with neither can spin all night.
 - Above 75% disk, stop proposing new work and clear space first: `docker system prune`, old images, and any volume you have a backup of.
-- When the OpenAI API refuses a call for quota or rate limits, stop and let the next scheduled run try again. Do not work around it with another key, model, or provider — that spends Zach's money to avoid an hour of idleness, and he would rather have the idle hour.
+- When the ChatGPT subscription hits its usage limit, stop and let a scheduled run try again after the reset. Do not work around it with another account, an API key, or another provider — that spends Zach's money to avoid an hour of idleness, and he would rather have the idle hour.
 
 Budget your own attention roughly 60% to Zach's requests, 20% to maintenance and improvements that compound, and 20% to self-directed work. The last 20% is a real budget, not a rounding error.
 
