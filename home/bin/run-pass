@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# run-pass <name>   run prompts/<name>.md under pi, with a lock and a timeout.
+# Cron runs this. See docs/PI-MIGRATION.md for why each piece is here.
+set -euo pipefail
+name="$1"
+set -a; . /home/ichabod/.config/ichabod/env; set +a
+day="$(date +%F)"; out="/home/ichabod/log/$day/$(date +%H%M)-$name.jsonl"
+mkdir -p "/home/ichabod/log/$day" /home/ichabod/.local/state
+
+# Pi has no working-directory flag; it reads AGENTS.md from the directory it starts in.
+cd /home/ichabod/workspace
+
+# --no-skills plus --skill loads exactly the repo's skills, without depending on project trust.
+# --no-extensions because an extension can add tools and preamble.
+rc=0
+flock -n "/home/ichabod/.local/state/$name.lock" \
+  timeout 1800 \
+  pi --mode json --tools read,write,edit,bash --no-session \
+     --no-extensions --no-skills --skill /home/ichabod/workspace/skills \
+     @"/home/ichabod/prompts/$name.md" > "$out" || rc=$?
+
+# Tokens per run, one line per pass. Field names are a guess until someone reads
+# a real event; do not trust this jq as written.
+jq -s '[.[] | .usage // empty] | {pass: "'"$name"'",
+       in: (map(.input_tokens) | add), out: (map(.output_tokens) | add)}' \
+  "$out" >> /home/ichabod/log/cost.jsonl
+exit $rc

@@ -78,13 +78,13 @@ It pipes the body into Pi, started like this:
 ```bash
 printf '%s' "$body" | env -i HOME=/tmp PATH=/usr/bin \
   PI_CODING_AGENT_DIR=/home/ichabod/.pi/agent \
-  pi -p --tools "" --no-session --no-context-files \
+  pi -p --no-tools --no-skills --no-extensions --no-session --no-context-files \
      @/home/ichabod/prompts/membrane.md
 ```
 
 Note the mode: **`-p`, not `--mode json`.** The passes use JSON mode because they need token counts, but the membrane's whole contract is that its output is four fields the wrapper validates. Under JSON mode the wrapper would have to unwrap an event envelope and then parse the text inside it — two parsers on the one path in this system where hostile input arrives. Fewer moving parts wins here.
 
-Read `--tools ""` carefully: that is an **empty** tool list, not a short one. Pi normally offers `read`, `write`, `edit`, `bash`, `grep`, `find` and `ls`. With an empty list it has none of them. The process cannot open a file, cannot run a command, cannot reach the network. The only thing it can do is print text.
+Read `--no-tools` carefully: it removes **every** tool, not just some. Pi normally offers `read`, `write`, `edit`, `bash`, `grep`, `find` and `ls`. With `--no-tools` it has none of them. The process cannot open a file, cannot run a command, cannot reach the network. The only thing it can do is print text.
 
 That is the whole security property, and it is worth saying plainly: **it does not matter what the email says, because the process reading it has no way to act on anything.**
 
@@ -120,10 +120,11 @@ Every flag in step 2 is load-bearing. If you are editing `intake` and one of the
 
 | Flag | What it does | What breaks without it |
 |---|---|---|
-| `--tools ""` | Gives the reader no tools at all | The reader can act. This is the whole boundary; nothing else matters if this is gone |
+| `--no-tools` | Gives the reader no tools at all | The reader can act. This is the whole boundary; nothing else matters if this is gone |
 | `env -i` | Starts the process with an empty environment, then adds back only what is listed | The reader inherits `GH_TOKEN`, `KANBOARD_TOKEN` and `IMAP_PASSWORD` from the sourced env file |
-| `PI_CODING_AGENT_DIR` | Points Pi at the ChatGPT login in `~/.pi/agent/auth.json`, the only credential the reader gets | With `HOME=/tmp` the reader finds no login and every message fails. Keep Pi extensions out of that directory, because an extension can add tools |
+| `PI_CODING_AGENT_DIR` | Points Pi at the ChatGPT login in `~/.pi/agent/auth.json`, the only credential the reader gets | With `HOME=/tmp` the reader finds no login and every message fails. |
 | `--no-context-files` | Stops Pi loading `AGENTS.md` and `CLAUDE.md` | The reader is handed a description of exactly what authority Ichabod has, which is the map an attacker wants |
+| `--no-skills`, `--no-extensions` | Stops Pi loading skill descriptions and extensions | Skills describe what Ichabod can do, the same map `--no-context-files` withholds, and an extension can add tools back |
 | `--no-session` | Writes no transcript to `~/.pi/agent/sessions/` | Hostile text accumulates in a second store that nothing prunes or backs up |
 
 Put that table's short version in a comment at the top of `intake`. A future edit that drops `env -i` for convenience is the most likely way this regresses, and it will look like a tidy-up.

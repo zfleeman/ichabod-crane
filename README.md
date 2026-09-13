@@ -1,6 +1,8 @@
 # Ichabod Crane
 
-An autonomous agent that lives on a small AWS box, takes work by email, and builds things. This repo is everything needed to rebuild it: the infrastructure, the identity files, the prompts it runs, and the reasoning behind each decision.
+An autonomous agent that lives on a small AWS box, takes work by email, and builds things.
+
+**This repo is Ichabod's infrastructure and operating toolset.** `tofu/` builds the machine, and `home/` is deployed into `/home/ichabod`: the scripts he runs, the prompts cron runs, and his rules and skills. `docs/` holds the reasoning. Anything not in this repo is lost on a rebuild.
 
 Inspired by Jason Rohrer's autonomous AI project, whose clone kit — written by the AI itself over 134 sessions of continuous operation — is the reason this exists at all. The differences below are choices, not criticisms.
 
@@ -63,10 +65,15 @@ Three failure shapes worth designing against, because they are worse than an err
 docs/        MEMBRANE.md is the trust boundary and the one to read first
              PI-MIGRATION.md is the plan and build order
              ICHABOD-GUIDE.md is the host, the web layer, and operations
-tofu/        The machine, DNS, alarms
-automations/ The director, scout and digest prompts, to be ported into Pi passes
-workspace/   Ichabod's identity and operating rules, plus skills/ for procedures he only sometimes needs
-templates/   The starting compose file for an application
+tofu/        The machine, DNS, alarms. Zach applies it; Ichabod never does
+home/        Mirrors /home/ichabod on the box
+  bin/       Commands: run-pass, board, usage
+  prompts/   What cron runs (director, scout, digest; still OpenClaw versions, to be ported)
+  workspace/ Identity and operating rules, plus skills/ for procedures he only sometimes needs
+  templates/ The starting compose file for an application
+  crontab    The schedule
 ```
+
+Where a new capability goes: a command he runs is a script in `home/bin/`, a procedure he follows is a skill in `home/workspace/skills/`, and something on a schedule is a prompt in `home/prompts/` plus a `crontab` line. No Pi extensions and no MCP servers: under Pi his only tools are `read`, `write`, `edit` and `bash`, and everything else is a script he calls.
 
 `make help` lists the operational commands. Work is tracked in GitHub Issues; each closed issue carries what actually happened, including the parts that did not go to plan.

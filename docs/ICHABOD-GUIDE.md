@@ -168,7 +168,7 @@ Back up the `ichabod-proxy_letsencrypt` volume or expect to re-issue after a reb
 
 ## The application contract
 
-[`templates/app/compose.yaml`](../templates/app/compose.yaml) is the starting point and already carries the shape. An application builds reproducibly from its repository, listens on `0.0.0.0` inside the container, publishes no host port, joins the external `ichabod-proxy` network, sets an explicit `Host()` rule, has a health check it can actually fail, and sets restart, CPU, memory, PID and log limits. The `cpus: "0.50"` / `mem_limit: 512m` defaults are a blast radius, not a budget, and are raised from a measured peak, never an estimate. Those limits are the only capacity ceiling on the box that Docker enforces rather than the agent remembering.
+[`home/templates/app/compose.yaml`](../home/templates/app/compose.yaml) is the starting point and already carries the shape. An application builds reproducibly from its repository, listens on `0.0.0.0` inside the container, publishes no host port, joins the external `ichabod-proxy` network, sets an explicit `Host()` rule, has a health check it can actually fail, and sets restart, CPU, memory, PID and log limits. The `cpus: "0.50"` / `mem_limit: 512m` defaults are a blast radius, not a budget, and are raised from a measured peak, never an estimate. Those limits are the only capacity ceiling on the box that Docker enforces rather than the agent remembering.
 
 The deploy sequence:
 

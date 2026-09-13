@@ -44,7 +44,7 @@ The good news is that it should get *stronger*. Every sandbox failure this proje
 
 ## Target architecture
 
-One box, one Unix user, six scripts, one crontab.
+One box, one Unix user, six scripts, one crontab. The repo's [`home/`](../home) mirrors `/home/ichabod`, so whatever exists there is the real file, not a sketch.
 
 ```
 /home/ichabod/
@@ -64,43 +64,11 @@ One box, one Unix user, six scripts, one crontab.
 
 `ichabod` runs every pass, every worker, and the membrane wrapper, and holds Docker, `gh`, the ChatGPT login and the mailbox. The membrane runs as `ichabod` rather than as a user of its own — see [MEMBRANE.md](MEMBRANE.md#what-we-deliberately-gave-up) for what that costs and how the isolation is kept anyway.
 
-The crontab, as a starting shape:
+The schedule is [`home/crontab`](../home/crontab).
 
-```cron
-*/5  * * * *  /home/ichabod/bin/intake
-*/15 * * * *  /home/ichabod/bin/usage >> /home/ichabod/log/usage.jsonl
-*/15 * * * *  /home/ichabod/bin/run-pass route
-*/15 * * * *  /home/ichabod/bin/run-pass work
-0 4,11,18 * * *  /home/ichabod/bin/run-pass scout
-0 7  * * *    /home/ichabod/bin/run-pass digest
-```
+[`run-pass`](../home/bin/run-pass) is the whole harness. `flock -n` is the concurrency rule that `--max-starts 1` enforces today: if the previous run is still going, this one exits rather than stacking. `timeout` is the stall recovery that "a `running` card that has not moved in over an hour is stuck" currently handles by hand. `rc` is captured rather than allowed to abort under `set -e`, because a failed pass still has a log worth summarising. Pi has no working-directory flag, so the script `cd`s into `workspace/` for Pi to find `AGENTS.md`.
 
-`run-pass` is the whole harness. Roughly:
-
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-name="$1"
-set -a; . /home/ichabod/.config/ichabod/env; set +a
-day="$(date +%F)"; out="/home/ichabod/log/$day/$(date +%H%M)-$name.jsonl"
-mkdir -p "/home/ichabod/log/$day" /home/ichabod/.local/state
-
-rc=0
-flock -n "/home/ichabod/.local/state/$name.lock" \
-  timeout 1800 \
-  pi --mode json --tools read,write,edit,bash --no-session \
-     -C /home/ichabod/workspace \
-     @"/home/ichabod/prompts/$name.md" > "$out" || rc=$?
-
-# The number this whole migration is about, one line per pass. Field names are
-# a guess until someone reads a real event; do not trust this jq as written.
-jq -s '[.[] | .usage // empty] | {pass: "'"$name"'",
-       in: (map(.input_tokens) | add), out: (map(.output_tokens) | add)}' \
-  "$out" >> /home/ichabod/log/cost.jsonl
-exit $rc
-```
-
-`flock -n` is the concurrency rule that `--max-starts 1` enforces today: if the previous run is still going, this one exits rather than stacking. `timeout` is the stall recovery that "a `running` card that has not moved in over an hour is stuck" currently handles by hand. `rc` is captured rather than allowed to abort under `set -e`, because a failed pass still has a log worth summarising.
+Skills load with `--no-skills --skill /home/ichabod/workspace/skills`: exactly that folder, nothing global. Pi only puts each skill's name and description in the system prompt, about 200 tokens for the three there now, and the agent reads the full `SKILL.md` when a task matches. Once read, a skill stays in context for the rest of the run. Project-local skill folders (`.pi/skills`, `.agents/skills`) are ignored in `--mode json` unless the project is trusted, which is why the path is explicit.
 
 Two small follow-ups on the lock. A skipped run exits 1 and leaves an empty log, so `health` cannot tell it from a failure; `flock -n -E 75` and an early clean exit on 75 fixes that. And `intake` should take its own `intake.lock`, so a slow membrane call cannot overlap the next five-minute run and pick up the same message twice.
 
@@ -111,19 +79,7 @@ The subscription's limits show on chatgpt.com, which nothing on the box can read
 - **Tokens per run**, from Pi's own events into `log/cost.jsonl` above. This is how hard each run worked.
 - **Percent of the allowance used**, from `usage`, into `log/usage.jsonl` every fifteen minutes. This is how much room is left.
 
-`usage` asks the endpoint that the Pi extensions [`pi-codex-rate-limits`](https://github.com/scnewma/pi-codex-rate-limits) and [`pi-codex-limit`](https://pi.dev/packages/pi-codex-limit) call, with the same login Pi uses:
-
-```bash
-#!/usr/bin/env bash
-# usage   one JSON line: 5-hour and weekly percent used, and when the week resets
-set -euo pipefail
-token="$(jq -r '."openai-codex".access' /home/ichabod/.pi/agent/auth.json)"
-curl -sS --fail -H "Authorization: Bearer $token" https://chatgpt.com/backend-api/wham/usage |
-  jq -c '{at: (now | todate), limit_reached: .rate_limit.limit_reached,
-          five_hour: .rate_limit.primary_window.used_percent,
-          weekly: .rate_limit.secondary_window.used_percent,
-          weekly_resets: (.rate_limit.secondary_window.reset_at | todate)}'
-```
+[`usage`](../home/bin/usage) asks the endpoint that the Pi extensions [`pi-codex-rate-limits`](https://github.com/scnewma/pi-codex-rate-limits) and [`pi-codex-limit`](https://pi.dev/packages/pi-codex-limit) call, with the same login Pi uses. It was run against a real Plus login on 2026-09-13 and returned both windows.
 
 The digest reports from both files, and `route` can run `usage` before dispatching self-directed work and hold off above a weekly threshold Zach picks. The endpoint is undocumented, so it can change without notice; `--fail` makes that an error `health` can see rather than a quiet gap in the log. The saved token lasts about ten days and Pi refreshes it when it runs, so `usage` only fails on expiry if Pi has not run in that long.
 
@@ -175,16 +131,7 @@ Pi has four: interactive, print (`-p`), JSON (`--mode json`), and RPC (`--mode r
 
 That second sentence is the whole design decision, and it is worth being blunt about why. MCP tool schemas are the tax this migration exists to remove — the 20-tool director preamble measured at 38,831 tokens carries 67,183 characters of tool schemas, most of it OpenClaw's 14 bridged MCP tools, re-sent on every single turn. Bolting a Kanboard MCP server onto Pi recreates that in miniature, permanently, for a board we could reach with `curl`. Pi does not ship MCP support at all; it arrives through a third-party adapter, and the most-recommended one advertises itself as "token-efficient," which tells you what the naive version costs.
 
-Kanboard's API does not need any of that. It is JSON-RPC over HTTP with basic auth — username `ichabod`, password that user's personal API token — so the whole integration is one script:
-
-```bash
-#!/usr/bin/env bash
-# board <method> [json-params]   e.g. board getAllTasks '{"project_id":1,"status_id":1}'
-set -euo pipefail
-curl -sS -u "ichabod:$KANBOARD_TOKEN" "$KANBOARD_URL/jsonrpc.php" \
-  -d "$(jq -cn --arg m "$1" --argjson p "${2:-{\}}" \
-        '{jsonrpc:"2.0",id:1,method:$m,params:$p}')" | jq '.result'
-```
+Kanboard's API does not need any of that. It is JSON-RPC over HTTP with basic auth — username `ichabod`, password that user's personal API token — so the whole integration is one script, [`home/bin/board`](../home/bin/board).
 
 **That costs zero preamble tokens.** `bash` is already one of Pi's four tools; the wrapper needs no schema, only three lines of usage in `route.md`. Compare that to a schema per board method on every request. It is also strictly more debuggable — you can run `board getAllTasks '{"project_id":1}'` yourself in a shell and see exactly what the agent sees, which is the verification style this project has learned to trust.
 
@@ -223,7 +170,7 @@ Its own document, because it is the only safety-critical piece here and it outli
 
 The short version. An email's *sender* is verified by the IMAP gate; its *content* never is, because Zach forwards things he did not write. A language model cannot tell instructions from data — they arrive as one block of text — so no amount of escaping makes hostile content safe. The only reliable answer is to split reading from acting: the process that sees the email can do nothing, and the process that can do anything never sees the email.
 
-Under Pi that becomes three steps. `intake` fetches one message. It pipes the body to `pi -p --tools ""` — an empty tool list, so the reader has no shell, no files, no network — under `env -i` so it inherits no credentials. Pi prints JSON with four fields; `intake` validates it and writes the card itself.
+Under Pi that becomes three steps. `intake` fetches one message. It pipes the body to `pi -p --no-tools`, so the reader has no shell, no files, no network — under `env -i` so it inherits no credentials. Pi prints JSON with four fields; `intake` validates it and writes the card itself.
 
 The gain over today is that the model stops making a tool call and starts filling in a form. `triage-guard` exists because a card could assign itself, and a hook had to strip the offending fields out of the model's own arguments. In the new shape the schema has no field for an owner, a command, or a schedule, so those cannot be expressed at all. The guard becomes unnecessary rather than enforced.
 
@@ -244,12 +191,12 @@ On the new instance, in rough order:
 - [ ] **Prove Pi.** Install `pi` as `ichabod`. Settle the run-mode flags and read one real `--mode json` stream for the actual `usage` field names. Run `scout.md` by hand and measure the preamble off the first usage event.
 - [ ] **Settle the allowance.** Log in to Ichabod's ChatGPT Plus account (`ichabod@ichabod-crane.net`) on the box with Pi's device code login, and pick the models. Prove `usage` works headless. Run the crontab for a day, then a day with dispatched workers, and check whether either hits the 5-hour or weekly limit — a pass is light, **workers on the strongest model are not**, and they are where the usage lives.
 - [ ] **The board.** Kanboard on the Synology at `ichabod-board.zfleeman.com`, with an `ichabod` user and its personal API token as `KANBOARD_TOKEN`, and columns triage, backlog, ready, running, review, blocked, done. `board` written, and `board createTask` works from inside Pi's `bash`. A nightly `board getAllTasks` dump committed into the workspace repo.
-- [ ] **`runtime/` in this repo:** `bin/`, `prompts/`, a crontab, and a deploy script. The old deploy's trick still works — SSM has no file copy, so ship a base64 tarball inside a run-command, built with `COPYFILE_DISABLE=1 tar --no-xattrs` so macOS metadata files stay out. `git show d005f4a:scripts/deploy-workspace` has it.
+- [ ] **A deploy script** that copies `home/` onto the box. The old deploy's trick still works — SSM has no file copy, so ship a base64 tarball inside a run-command, built with `COPYFILE_DISABLE=1 tar --no-xattrs` so macOS metadata files stay out. `git show d005f4a:scripts/deploy-workspace` has it.
 - [ ] **`notify`,** proven by a real email arriving with the right envelope sender.
 - [ ] **Prompts.** Port `scout.md` and `digest.md`. Rewrite `director.md` into `route.md` against `board` — the projection one-liner and the twin-card retirement both disappear, since Kanboard returns small results and tasks can be edited in place. Write `work.md`: take the top `ready` task, do it, comment what happened, move the column. Reasoning goes on the card as a comment, so most of `memory/YYYY-MM-DD/` stops existing.
 - [ ] **The membrane.** `intake` and `membrane.md` built to [MEMBRANE.md](MEMBRANE.md), and all four of [its tests](MEMBRANE.md#how-to-test-it) passing — injection, credentials, malformed output, and a normal request. Not three.
 - [ ] **`health`,** and a check that it shouts when a pass has not succeeded.
-- [ ] **`workspace/AGENTS.md`** finished against the real stack, including the journal rules the board made obsolete.
+- [ ] **`home/workspace/AGENTS.md`** finished against the real stack, including the journal rules the board made obsolete.
 - [ ] **End to end.** Install the crontab, email Ichabod a small request, and watch it go from intake to a reply.
 
 `zf/pi-migration` merges to `main` once that last box is ticked.
