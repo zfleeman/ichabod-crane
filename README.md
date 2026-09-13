@@ -10,7 +10,7 @@ Zach sends an email. A reader with no tools turns it into a card on a board. The
 
 ## Why Pi
 
-**Ichabod runs on Pi and cron.** It used to run on OpenClaw; merging the migration branch is the cutover, and the plan is [docs/PI-MIGRATION.md](docs/PI-MIGRATION.md).
+**Ichabod runs on Pi and cron.** It used to run on OpenClaw, on an instance that is destroyed and rebuilt for the switch; the plan is [docs/PI-MIGRATION.md](docs/PI-MIGRATION.md).
 
 The short reason: a routing pass under OpenClaw carried 38,831 tokens of preamble before it did anything, about a third of which was not ours to control and roughly half of the rest tool schemas. Pi is four tools and a short system prompt, driven from a crontab.
 

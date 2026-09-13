@@ -145,7 +145,7 @@ Not by reading the config. By attacking it.
 3. **The malformed-output test.** Feed it something that makes the model ramble instead of returning JSON. It must quarantine and email, not guess.
 4. **The normal test.** A real request from Zach becomes one clean card.
 
-All four pass before this merges. Not three.
+All four pass before intake goes on the crontab. Not three.
 
 ## Rules for anyone editing `intake`
 

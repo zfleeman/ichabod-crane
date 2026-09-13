@@ -33,7 +33,7 @@ Settled, so the build list below reads as work rather than as options. The reaso
 | The agent reaches the board through a `board` shell wrapper, **not** MCP | [The board](#the-board) |
 | The mail membrane keeps its boundary, rebuilt around a tool-less reader | [MEMBRANE.md](MEMBRANE.md) |
 | The membrane runs as `ichabod`, not as a user of its own | [MEMBRANE.md](MEMBRANE.md) |
-| Merging this branch to `main` is the cutover. No period of running both stacks | [Cutover](#cutover) |
+| The OpenClaw instance is destroyed outright and a fresh one built from `tofu/`. Nothing on it is kept, and the two stacks never run side by side | [Teardown](#teardown) |
 
 Still open: whether Pi can use the Claude subscription or this is API-key-only, and what dispatched workers cost on an API key. Answer both before merging.
 
@@ -201,9 +201,17 @@ The gain over today is that the model stops making a tool call and starts fillin
 
 Zach chose to run this as `ichabod` rather than as a credential-free user of its own. MEMBRANE.md records exactly what that costs and the three flags that buy most of it back.
 
-## Before merging
+## Teardown
 
-No phases. This branch merges when the box can run on it, and merging is the switch. In rough build order:
+Full destruction first, then a clean build. The repo is already trimmed (2026-09-13); `git show d005f4a:<path>` recovers anything from the OpenClaw era, and nothing on the box is being preserved.
+
+- [ ] **Revoke what the old box held.** The mailbox app password, the `gh` token, the OpenAI key, and the old box's SSH key on the `ich4bod` account. Their only copies are about to be destroyed, so reissue rather than recover.
+- [ ] **Replace the instance.** In `tofu/main.tf` set `disable_api_termination = false` and apply, refresh `ami_id` in `terraform.tfvars`, then `tofu -chdir=tofu apply -replace=aws_instance.ichabod`. Set termination protection back to `true` and apply again. The Elastic IP, DNS, alarms and budget are separate resources and survive, and the association moves to the new instance on its own.
+- [ ] **Build the host** from [ICHABOD-GUIDE.md](ICHABOD-GUIDE.md#5-host), then Traefik. Sites under `*.ichabod-crane.net` come back by redeploying from their `ich4bod` repositories.
+
+## Build
+
+On the new instance, in rough order:
 
 - [ ] **Prove Pi.** Install `pi` as `ichabod`. Settle the run-mode flags and read one real `--mode json` stream for the actual `usage` field names. Run `scout.md` by hand and measure the preamble off the first usage event.
 - [ ] **Settle the money.** Can Pi use the Claude subscription, or is this API-key-only? Price one real pass, then the crontab above, then a day of dispatched workers separately — a pass is cheap, **workers on Opus are not**, and they are where the volume lives.
@@ -214,14 +222,9 @@ No phases. This branch merges when the box can run on it, and merging is the swi
 - [ ] **The membrane.** `MEMBRANE_KEY` as a second API key with its own spend cap. `intake` and `membrane.md` built to [MEMBRANE.md](MEMBRANE.md), and all four of [its tests](MEMBRANE.md#how-to-test-it) passing — injection, credentials, malformed output, and a normal request. Not three.
 - [ ] **`health`,** and a check that it shouts when a pass has not succeeded.
 - [ ] **`workspace/AGENTS.md`** finished against the real stack, including the journal rules the board made obsolete.
+- [ ] **End to end.** Install the crontab, email Ichabod a small request, and watch it go from intake to a reply.
 
-## Cutover
-
-`zf/pi-migration` merges to `main` once, and that is the cutover. The repo is already trimmed (2026-09-13); `git show d005f4a:<path>` recovers anything OpenClaw-era. On the box, at merge:
-
-- [ ] Stop and disable the Gateway, uninstall OpenClaw, and delete the `openclaw` user. Nothing on it is being preserved.
-- [ ] Deploy `runtime/`, provision `/srv/ichabod/env`, install the crontab.
-- [ ] Email Ichabod a small request and watch it go from intake to a reply.
+`zf/pi-migration` merges to `main` once that last box is ticked.
 
 ## Later
 
