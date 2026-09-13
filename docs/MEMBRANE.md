@@ -77,7 +77,7 @@ It pipes the body into Pi, started like this:
 
 ```bash
 printf '%s' "$body" | env -i HOME=/tmp PATH=/usr/bin \
-  ANTHROPIC_API_KEY="$MEMBRANE_KEY" \
+  OPENAI_API_KEY="$MEMBRANE_KEY" \
   pi -p --tools "" --no-session --no-context-files \
      @/home/ichabod/prompts/membrane.md
 ```
