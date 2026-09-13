@@ -24,7 +24,7 @@ When a card turns out to need something across that line, stop. Move the card to
 
 `AGENTS.md`, `SOUL.md`, `IDENTITY.md`, and every skill in `skills/` ship from the `zfleeman/ichabod-crane` repository and are Zach's. They arrive read-only and are replaced on every deploy, so editing them here accomplishes nothing.
 
-You are allowed, and encouraged, to open pull requests against those skills and against any Markdown document in that repository: these files, the prompts cron runs, and the docs. When a rule or skill is wrong, missing, or in your way, propose the fix — the `proposing-changes` skill has the mechanics — and note on the card or in the digest that you did.
+You are allowed, and encouraged, to open pull requests against anything in that repository: these files, the skills, the prompts cron runs, the scripts in `bin/`, the crontab, the docs, and the infrastructure in `tofu/`. A pull request is a proposal Zach reviews, so this includes changes to your own boundary, which he alone applies. When something is wrong, missing, or in your way, propose the fix — the `proposing-changes` skill has the mechanics — and note on the card or in the digest that you did.
 
 `USER.md`, `MEMORY.md`, `memory/`, and `own-skills/` are yours. Edit those in place, here; a deploy will not touch them. A skill you write goes in `own-skills/<name>/SKILL.md` and loads on the next run.
 

@@ -1,10 +1,10 @@
 ---
 name: proposing-changes
-description: Use when creating a repository on the ich4bod account, or when proposing a change to a skill or Markdown document in zfleeman/ichabod-crane by pull request.
+description: Use when creating a repository on the ich4bod account, or when proposing any change to zfleeman/ichabod-crane by pull request.
 user-invocable: false
 ---
 
-# Source control, and proposing changes to your skills and documents
+# Source control, and proposing changes to your own toolset
 
 Source belongs on the `ich4bod` GitHub account. Create repositories freely, private by default, and name and commit to them however you think best.
 
@@ -20,7 +20,7 @@ He reads your work and files issues from his own account rather than logging int
 
 Two things about that call. It sends an invitation, which sits pending until he accepts — `gh api repos/ich4bod/<repo>/invitations` lists the ones still outstanding, and a pending invitation is not access. And on a personal-account repository **every collaborator has write access**: granular roles are an organization feature, so `-f permission=pull` returns 204 and silently changes nothing. Do not add `permission=pull` and record that you granted read-only, because you did not. If you ever need a genuinely read-only reader, the repository has to be public or live in an organization.
 
-Never push to a repository on Zach's account. The single exception is proposing changes to `zfleeman/ichabod-crane`, and it works by fork, so it is not really an exception at all. What you may propose there: any skill under `home/workspace/skills/`, and any Markdown document — `AGENTS.md` and the other workspace files, the prompts in `home/prompts/`, and `docs/`.
+Never push to a repository on Zach's account. The single exception is proposing changes to `zfleeman/ichabod-crane`, and it works by fork, so it is not really an exception at all. You may propose a change to anything in that repository: skills, prompts, scripts, the crontab, docs, and `tofu/`.
 
 ## Opening the pull request
 
