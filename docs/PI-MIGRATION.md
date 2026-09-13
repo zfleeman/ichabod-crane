@@ -117,7 +117,6 @@ The subscription's limits show on chatgpt.com, which nothing on the box can read
 #!/usr/bin/env bash
 # usage   one JSON line: 5-hour and weekly percent used, and when the week resets
 set -euo pipefail
-# The auth.json key names are a guess; check them with `jq keys` before trusting this.
 token="$(jq -r '."openai-codex".access' /home/ichabod/.pi/agent/auth.json)"
 curl -sS --fail -H "Authorization: Bearer $token" https://chatgpt.com/backend-api/wham/usage |
   jq -c '{at: (now | todate), limit_reached: .rate_limit.limit_reached,
@@ -126,7 +125,7 @@ curl -sS --fail -H "Authorization: Bearer $token" https://chatgpt.com/backend-ap
           weekly_resets: (.rate_limit.secondary_window.reset_at | todate)}'
 ```
 
-The digest reports from both files, and `route` can run `usage` before dispatching self-directed work and hold off above a weekly threshold Zach picks. The endpoint is undocumented, so it can change without notice; `--fail` makes that an error `health` can see rather than a quiet gap in the log. The token Pi saves expires and Pi refreshes it only when it runs, so after a long idle stretch `usage` can fail once until the next pass.
+The digest reports from both files, and `route` can run `usage` before dispatching self-directed work and hold off above a weekly threshold Zach picks. The endpoint is undocumented, so it can change without notice; `--fail` makes that an error `health` can see rather than a quiet gap in the log. The saved token lasts about ten days and Pi refreshes it when it runs, so `usage` only fails on expiry if Pi has not run in that long.
 
 ### Which run mode, and why
 
