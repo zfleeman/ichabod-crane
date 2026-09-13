@@ -149,18 +149,20 @@ Pi has four: interactive, print (`-p`), JSON (`--mode json`), and RPC (`--mode r
 
 That second sentence is the whole design decision, and it is worth being blunt about why. MCP tool schemas are the tax this migration exists to remove — the 20-tool director preamble measured at 38,831 tokens carries 67,183 characters of tool schemas, most of it OpenClaw's 14 bridged MCP tools, re-sent on every single turn. Bolting a Kanboard MCP server onto Pi recreates that in miniature, permanently, for a board we could reach with `curl`. Pi does not ship MCP support at all; it arrives through a third-party adapter, and the most-recommended one advertises itself as "token-efficient," which tells you what the naive version costs.
 
-Kanboard's API does not need any of that. It is JSON-RPC over HTTP with basic auth — username `jsonrpc`, password the API token — so the whole integration is one script:
+Kanboard's API does not need any of that. It is JSON-RPC over HTTP with basic auth — username `ichabod`, password that user's personal API token — so the whole integration is one script:
 
 ```bash
 #!/usr/bin/env bash
 # board <method> [json-params]   e.g. board getAllTasks '{"project_id":1,"status_id":1}'
 set -euo pipefail
-curl -sS -u "jsonrpc:$KANBOARD_TOKEN" "$KANBOARD_URL/jsonrpc.php" \
+curl -sS -u "ichabod:$KANBOARD_TOKEN" "$KANBOARD_URL/jsonrpc.php" \
   -d "$(jq -cn --arg m "$1" --argjson p "${2:-{\}}" \
         '{jsonrpc:"2.0",id:1,method:$m,params:$p}')" | jq '.result'
 ```
 
 **That costs zero preamble tokens.** `bash` is already one of Pi's four tools; the wrapper needs no schema, only three lines of usage in `route.md`. Compare that to a schema per board method on every request. It is also strictly more debuggable — you can run `board getAllTasks '{"project_id":1}'` yourself in a shell and see exactly what the agent sees, which is the verification style this project has learned to trust.
+
+**Ichabod authenticates as his own Kanboard user, not with the global `jsonrpc` token.** The instance exists only for him, so the `ichabod` user is an admin. The user token still beats the global one: comments and moves are attributed to Ichabod, and his token can be revoked on its own. Two things go with admin rights. Zach keeps a separate admin account, so Ichabod can never lock him out. And the plugin installer is off (`PLUGIN_INSTALLER=false`), because Kanboard plugins are PHP, and an admin who can install one can run code on the Synology, which is outside Ichabod's boundary.
 
 ### Where Kanboard runs
 
@@ -215,7 +217,7 @@ On the new instance, in rough order:
 
 - [ ] **Prove Pi.** Install `pi` as `ichabod`. Settle the run-mode flags and read one real `--mode json` stream for the actual `usage` field names. Run `scout.md` by hand and measure the preamble off the first usage event.
 - [ ] **Settle the money.** Can Pi use the Claude subscription, or is this API-key-only? Price one real pass, then the crontab above, then a day of dispatched workers separately — a pass is cheap, **workers on Opus are not**, and they are where the volume lives.
-- [ ] **The board.** Kanboard on the Synology at `ichabod-board.zfleeman.com` with columns triage, backlog, ready, running, review, blocked, done. `board` written, and `board createTask` works from inside Pi's `bash`. A nightly `board getAllTasks` dump committed into the workspace repo.
+- [ ] **The board.** Kanboard on the Synology at `ichabod-board.zfleeman.com`, with an `ichabod` user and its personal API token as `KANBOARD_TOKEN`, and columns triage, backlog, ready, running, review, blocked, done. `board` written, and `board createTask` works from inside Pi's `bash`. A nightly `board getAllTasks` dump committed into the workspace repo.
 - [ ] **`runtime/` in this repo:** `bin/`, `prompts/`, a crontab, and a deploy script. The old deploy's trick still works — SSM has no file copy, so ship a base64 tarball inside a run-command, built with `COPYFILE_DISABLE=1 tar --no-xattrs` so macOS metadata files stay out. `git show d005f4a:scripts/deploy-workspace` has it.
 - [ ] **`notify`,** proven by a real email arriving with the right envelope sender.
 - [ ] **Prompts.** Port `scout.md` and `digest.md`. Rewrite `director.md` into `route.md` against `board` — the projection one-liner and the twin-card retirement both disappear, since Kanboard returns small results and tasks can be edited in place. Write `work.md`: take the top `ready` task, do it, comment what happened, move the column. Reasoning goes on the card as a comment, so most of `memory/YYYY-MM-DD/` stops existing.
