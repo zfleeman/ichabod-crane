@@ -101,6 +101,8 @@ exit $rc
 
 `flock -n` is the concurrency rule that `--max-starts 1` enforces today: if the previous run is still going, this one exits rather than stacking. `timeout` is the stall recovery that "a `running` card that has not moved in over an hour is stuck" currently handles by hand. `rc` is captured rather than allowed to abort under `set -e`, because a failed pass still has a log worth summarising.
 
+Two small follow-ups on the lock. A skipped run exits 1 and leaves an empty log, so `health` cannot tell it from a failure; `flock -n -E 75` and an early clean exit on 75 fixes that. And `intake` should take its own `intake.lock`, so a slow membrane call cannot overlap the next five-minute run and pick up the same message twice.
+
 ### Which run mode, and why
 
 Pi has four: interactive, print (`-p`), JSON (`--mode json`), and RPC (`--mode rpc`). Two of them are used here.
