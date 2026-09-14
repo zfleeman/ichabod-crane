@@ -1,11 +1,10 @@
 # The shipped schedule. `make cron` installs it as /etc/cron.d/ichabod-schedule; `make deploy` never does.
 # Ichabod's own crontab (`crontab -l` as ichabod) is separate and his to edit.
-# receive-mail stays commented out until the four tests in docs/MEMBRANE.md pass.
 # route and work stay commented out until home/prompts/route.md and work.md exist.
 # Every job here has a heartbeat alarm in tofu/main.tf. Add one when you add a job, and change its hours when you change its schedule.
 PATH=/home/ichabod/bin:/home/ichabod/.local/bin:/usr/local/bin:/usr/bin:/bin
 
-# */30 * * * *   ichabod  /home/ichabod/bin/receive-mail >> /home/ichabod/log/receive-mail.log 2>&1
+*/30 * * * *     ichabod  /home/ichabod/bin/receive-mail >> /home/ichabod/log/receive-mail.log 2>&1
 0 * * * *        ichabod  /home/ichabod/bin/usage >> /home/ichabod/log/usage.jsonl
 # 0 * * * *      ichabod  /home/ichabod/bin/run route openai-codex/gpt-5.6-luna >> /home/ichabod/log/run.log 2>&1
 # work runs at half past, so it picks up what route moved to ready on the hour.
