@@ -60,8 +60,7 @@ Every run starts with an empty context, and nothing carries over from the last r
 | `SOUL.md`, `IDENTITY.md` | Zach | Read when needed | Voice, honesty rules, name and signature |
 | `USER.md` | Ichabod | Read when needed | What he has learned about Zach, one dated directive per entry |
 | `MEMORY.md` | Ichabod | Read when needed | Durable conclusions: decisions and why, lessons, facts about the estate. Kept between 4,000 and 5,500 characters |
-| `memory/YYYY-MM-DD.md` | Ichabod | Read when needed | That day's contents page, one line per journal entry |
-| `memory/YYYY-MM-DD/NN-HHMM-<name>.md` | Ichabod | Opened one at a time, from the contents page | The journal: what was tried, what broke, the command that finally worked |
+| `memory/` | Ichabod | A day's contents page, then one entry at a time | The journal; see [below](#the-journal-memory) |
 | `skills/`, `own-skills/` | Zach, Ichabod | Name and description every run; the full `SKILL.md` when a task matches | Procedures needed only sometimes |
 | The board | Both | `board` calls | Everything about one card: acceptance criteria, reasoning as comments, its column |
 
@@ -70,6 +69,30 @@ A fact moves up that table as it proves it will last. It starts as a comment on 
 Pi looks for `AGENTS.md` in `~/.pi/agent/`, in every parent of the directory it starts in, and in that directory. Only `workspace/AGENTS.md` exists, so only it loads. Creating `/home/ichabod/AGENTS.md` would silently add to every run's preamble.
 
 `log/` is not memory. The passes read `cost.jsonl` and `usage.jsonl` from it, and the per-run transcripts are for Zach.
+
+### The journal, `memory/`
+
+```
+memory/
+  2026-09-14.md                    contents page: one line per entry, "HHMM-name — what it covers"
+  2026-09-14/
+    01-0215-traefik-cert-renewal.md
+    02-0930-card-42.md
+    03-1410-disk-cleanup.md
+  2026-09-15.md
+  2026-09-15/
+    01-0340-docker-prune.md
+```
+
+**Why a day is a folder.** Under the previous harness the journal was one file per day. It reached 101,779 bytes, every pass opened it, and a file a pass opens is re-sent on every later turn of that run, so one day of journal spent the whole usage limit. Now a day is a contents page that fits on one screen plus one file per entry, and a pass reads the page and opens only the entries it needs.
+
+**What goes in it.** What is worth keeping and does not belong to one card: a lesson about the box, a debugging trail that spans cards, a maintenance finding, the command that finally worked. Reasoning about a card goes on that card as a comment. A pass with nothing worth keeping writes nothing, which is the big change from the old director pass, whose cards could not take comments and so wrote an entry every run.
+
+**Naming.** `NN-HHMM-<topic>.md`. `NN` is the entry's position in the day and keeps the folder in order, `HHMM` is when it was written, and `<topic>` is a short slug. An entry holding one card's detail that is too long for a comment is `card-<id>`, and the card links to it.
+
+**Reading it.** The day's contents page first, then single entries. `grep -r` across `memory/` finds something older. Never open a whole day.
+
+**How it ends.** Nothing deletes it. A day nobody opens costs nothing, so old days stay as an archive. When an entry holds something that will still matter in a month, one line of it goes into `MEMORY.md` and the detail stays behind. Deploys never touch `memory/`, it has no backup, and the digest flags a day that grows too large.
 
 ## run
 
@@ -143,7 +166,7 @@ MCP tool schemas are exactly the preamble tax Pi was chosen to remove: a schema 
 - A per-hour send cap, as a backstop against a retry loop.
 - The SMTP password is redacted out of any error text.
 
-**There is no search or archive command, on purpose.** Replying needs the original `Message-ID`, and `receive-mail` writes it onto every card. Archiving keeps the inbox to unread mail, and `receive-mail` does that the moment the card exists. A search command would be a way for an agent with tools to read message bodies, which is exactly what the membrane exists to prevent. Rejected and quarantined mail waits in those folders for Zach to read in Fastmail.
+**There is no search or archive command, on purpose.** Replying needs the original `Message-ID`, and `receive-mail` writes it onto every card. It is the `Message-ID` header and never the IMAP UID, because a UID belongs to one folder and changes when the message moves: the same message was UID 21 in `INBOX` and UID 19 in `Archive` under the previous harness, with its `Message-ID` unchanged. Archiving keeps the inbox to unread mail, and `receive-mail` does that the moment the card exists. A search command would be a way for an agent with tools to read message bodies, which is exactly what the membrane exists to prevent. Rejected and quarantined mail waits in those folders for Zach to read in Fastmail.
 
 ## Trade-offs this design accepts
 

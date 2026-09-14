@@ -241,6 +241,7 @@ def process(imap, uid, uidvalidity, seen_uids, seen_message_ids):
     msg = email.message_from_bytes(raw, policy=email.policy.default)
     message_id = header_text(msg, "Message-ID")
 
+    # UIDs are per folder, so a filed message dragged back from Archive has a new one; Message-ID still matches.
     if (uidvalidity, int(uid)) in seen_uids or (message_id and message_id in seen_message_ids):
         imap.uid("STORE", uid, "+FLAGS", "(\\Seen)")
         log(uid, "skipped", "already processed")
