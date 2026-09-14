@@ -8,3 +8,5 @@ curl -sS --fail -H "Authorization: Bearer $token" https://chatgpt.com/backend-ap
           five_hour: .rate_limit.primary_window.used_percent,
           weekly: .rate_limit.secondary_window.used_percent,
           weekly_resets: (.rate_limit.secondary_window.reset_at | todate)}'
+# health turns this into a CloudWatch heartbeat.
+touch /home/ichabod/.local/state/usage.ok

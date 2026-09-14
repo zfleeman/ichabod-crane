@@ -29,7 +29,7 @@ check: ## Formatting and validation
 test: ## Lint and unit test the scripts in home/bin
 	ruff check
 	ruff format --check
-	uvx --from shellcheck-py shellcheck -e SC1091 home/bin/run home/bin/board home/bin/usage home/bin/set-secret scripts/deploy scripts/install-home
+	uvx --from shellcheck-py shellcheck -e SC1091 home/bin/run home/bin/board home/bin/usage home/bin/health home/bin/set-secret scripts/deploy scripts/install-home
 	uv run --group dev pytest -q
 
 plan: ## Show what would change

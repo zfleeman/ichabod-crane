@@ -38,6 +38,8 @@ QUARANTINE_FOLDER = "Quarantine"
 ARCHIVE_FOLDER = "Archive"
 STATE_FILE = f"{HOME}/.local/state/receive-mail-seen.jsonl"
 LOCK_FILE = f"{HOME}/.local/state/receive-mail.lock"
+# Touched after a clean run; health turns it into a CloudWatch heartbeat.
+OK_FILE = f"{HOME}/.local/state/receive-mail.ok"
 
 READER = [
     "/usr/bin/env", "-i", "HOME=/tmp", "PATH=/usr/bin",
@@ -65,7 +67,7 @@ def log(uid, outcome, reason=""):
 
 
 def tell_zach(subject, body):
-    # send-mail is the only way mail leaves the box. If it fails, receive-mail fails, so health sees it.
+    # send-mail is the only way mail leaves the box. If it fails, receive-mail fails, and its heartbeat stops.
     subprocess.run([f"{HOME}/bin/send-mail", subject], input=body.encode(), check=True, timeout=120)
 
 
@@ -326,6 +328,7 @@ def main():
                 reads += 1
     finally:
         imap.logout()
+    open(OK_FILE, "w").close()
     return 0
 
 

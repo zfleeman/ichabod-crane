@@ -91,7 +91,7 @@ Everything below runs from `make shell`, which lands as `ssm-user` with password
 3. Create `apps`, `platform`, `backups` and `src` under `/home/ichabod`, owned by `ichabod`.
 4. A 4 GiB swap file in `/etc/fstab`. It is an OOM fuse, not working memory.
 5. `systemctl disable --now ssh ssh.socket`. Both units: on 24.04 sshd is socket-activated, so disabling only the service leaves port 22 listening. `ss -lntp` showing nothing on 22 is the check that settles it.
-6. Install the CloudWatch agent. Its config lives at `/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json`, collects only `/`, and sets `aggregation_dimensions` to `InstanceId`. Both details are load-bearing: the alarms have `InstanceId` as their only dimension, and the default per-filesystem metrics also carry `path`, `device` and `fstype`, which never match.
+6. Install the CloudWatch agent. Its config lives at `/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json`, collects only `/`, and sets `aggregation_dimensions` to `InstanceId`. Both details are load-bearing: the alarms have `InstanceId` as their only dimension, and the default per-filesystem metrics also carry `path`, `device` and `fstype`, which never match. Also install the [AWS CLI v2](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html), which `health` uses to publish heartbeats with the instance role.
 7. Install Docker Engine, `usermod -aG docker ichabod`, and cap logs in `/etc/docker/daemon.json` before any application exists:
 
    ```json

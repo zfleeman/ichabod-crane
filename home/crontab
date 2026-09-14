@@ -2,6 +2,7 @@
 # Ichabod's own crontab (`crontab -l` as ichabod) is separate and his to edit.
 # receive-mail stays commented out until the four tests in docs/MEMBRANE.md pass.
 # route and work stay commented out until home/prompts/route.md and work.md exist.
+# Every job here has a heartbeat alarm in tofu/main.tf. Add one there when you add a job here.
 PATH=/home/ichabod/.local/bin:/usr/local/bin:/usr/bin:/bin
 
 # */5  * * * *   ichabod  /home/ichabod/bin/receive-mail >> /home/ichabod/log/receive-mail.log 2>&1
@@ -10,3 +11,4 @@ PATH=/home/ichabod/.local/bin:/usr/local/bin:/usr/bin:/bin
 # */15 * * * *   ichabod  /home/ichabod/bin/run work
 0 4,11,18 * * *  ichabod  /home/ichabod/bin/run scout
 0 7  * * *       ichabod  /home/ichabod/bin/run digest
+*/15 * * * *     ichabod  /home/ichabod/bin/health >> /home/ichabod/log/health.log 2>&1

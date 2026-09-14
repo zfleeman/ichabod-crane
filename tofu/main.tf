@@ -357,6 +357,36 @@ resource "aws_cloudwatch_metric_alarm" "disk_urgent" {
   alarm_actions       = [aws_sns_topic.alerts.arn]
 }
 
+# One alarm per scheduled job in home/crontab. Each job touches a marker on success, and home/bin/health
+# publishes it as a heartbeat every 15 minutes. Mail can be what broke, so these shout through SNS
+# instead: a dead box, a stopped cron, a broken health or broken mail all arrive as missing data.
+# The value is how many hours a job may go without a success. A job still commented out in the crontab
+# sits in ALARM until its line is enabled.
+resource "aws_cloudwatch_metric_alarm" "heartbeat" {
+  for_each = {
+    receive-mail = 1
+    usage        = 2
+    route        = 2
+    work         = 2
+    scout        = 12
+    digest       = 26
+  }
+
+  alarm_name          = "ichabod-heartbeat-${each.key}"
+  alarm_description   = "No successful ${each.key} run for ${each.value} hours."
+  namespace           = "ichabod"
+  metric_name         = "Heartbeat"
+  statistic           = "Sum"
+  period              = 3600
+  evaluation_periods  = each.value
+  threshold           = 1
+  comparison_operator = "LessThanThreshold"
+  treat_missing_data  = "breaching"
+  dimensions          = { Job = each.key }
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+}
+
 # Expected spend is roughly $67 a month, so $80 leaves headroom before it fires.
 resource "aws_budgets_budget" "ichabod" {
   name         = "ichabod-monthly"

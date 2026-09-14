@@ -28,4 +28,7 @@ jq -s '[.[] | .usage // empty] | {pass: "'"$name"'",
        in: (map(.input_tokens) | add), out: (map(.output_tokens) | add)}' \
   "$out" >> /home/ichabod/log/cost.jsonl || echo "run: no cost line for $name, $out is not JSON" >&2
 
+# health turns this into a CloudWatch heartbeat.
+if [ "$rc" = 0 ]; then touch "/home/ichabod/.local/state/$name.ok"; fi
+
 exit $rc

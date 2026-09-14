@@ -21,7 +21,7 @@ One box, one Unix user, one crontab. The repo's [`home/`](../home) mirrors `/hom
     board         one curl per Kanboard JSON-RPC method, the agent's only board access
     receive-mail  fetch mail -> membrane -> card -> archive
     send-mail     send one email to Zach
-    health        touch on success; shout when stale
+    health        publish a CloudWatch heartbeat for each job that succeeded
     usage         the ChatGPT Plus 5-hour and weekly usage, as one JSON line
     set-secret    prompt for one secret and write it into the env file
   prompts/
@@ -102,7 +102,7 @@ memory/
 
 - **`flock -n`** is the concurrency rule: if the previous run of that pass is still going, this one exits rather than stacking.
 - **`timeout`** is stall recovery. A pass that hangs is killed, and its log up to the kill survives.
-- **`rc` is Pi's exit code**, where 0 means success. `run` saves it instead of letting `set -e` stop the script on a failure, so a failed pass still gets its line in `cost.jsonl`, and then exits with that code so cron and `health` see the failure.
+- **`rc` is Pi's exit code**, where 0 means success. `run` saves it instead of letting `set -e` stop the script on a failure, so a failed pass still gets its line in `cost.jsonl`, and then exits with that code so a failed pass leaves no success marker for `health`.
 - **It `cd`s into `workspace/`**, because Pi has no working-directory flag and finds `AGENTS.md` in the directory it starts in.
 
 Skills load with `--no-skills` and two `--skill` folders: `workspace/skills/`, which ships from this repo, and `workspace/own-skills/`, which Ichabod writes himself. Nothing global loads. Pi only puts each skill's name and description in the system prompt, and the agent reads the full `SKILL.md` when a task matches; once read, a skill stays in context for the rest of the run. Project-local skill folders (`.pi/skills`, `.agents/skills`) are ignored in `--mode json` unless the project is trusted, which is why the paths are explicit.
@@ -122,7 +122,17 @@ Pi has four: interactive, print (`-p`), JSON (`--mode json`), and RPC (`--mode r
 ### Rules that have already been paid for
 
 - **Never pass a prompt through `sudo -iu`.** The `-i` login shell re-parses the command line, so a Markdown prompt has its backticks executed on the box. It has happened. Cron runs as `ichabod` and needs no `sudo`; keep it that way.
-- **Make failure loud.** A pass that dies at line 2 and a pass with nothing to do look identical from outside, and a stock heartbeat job once failed forty runs in a row unnoticed. `health` exists for this, and it must shout when its own check breaks rather than go quiet.
+- **Make failure loud.** A pass that dies at line 2 and a pass with nothing to do look identical from outside, and a stock heartbeat job once failed forty runs in a row unnoticed. `health` exists for this, and it must shout when its own check breaks rather than go quiet. See [Health](#health).
+
+## Health
+
+**Mail can be what broke, so `health` does not email.** A revoked app password, a Fastmail outage or the send cap would silence the very message saying so. The shouting happens outside the box instead.
+
+Every job touches `.local/state/<job>.ok` when it succeeds: `run` for each pass, and `receive-mail` and `usage` themselves. Every 15 minutes, `health` publishes one `ichabod/Heartbeat` CloudWatch datapoint, dimension `Job`, for each marker touched since its last run. The instance role already allows that through `CloudWatchAgentServerPolicy`.
+
+`tofu/main.tf` has one alarm per job that fires when heartbeats stop, and it sends to the same `ichabod-alerts` SNS topic as the other alarms. Missing data counts as failing, so a dead box, a stopped cron, a broken `health` and a broken `send-mail` all look the same: a job went quiet. How many hours each job may stay quiet lives only in that alarm block, and a new job in `home/crontab` needs a line there too.
+
+Ichabod is root-equivalent and could publish a fake heartbeat. That is accepted, the same as everything else he could fake.
 - **Re-check the tool list after every Pi upgrade.** An allowlist that silently changes meaning once swapped a synchronous shell for an async one, and a pass spent 14 turns in a sleep-and-poll loop.
 
 ## Models and usage
@@ -136,7 +146,7 @@ The limits show on chatgpt.com, which nothing on the box can read. Two numbers s
 - **Tokens per run**, from Pi's own events into `log/cost.jsonl`. This is how hard each run worked.
 - **Percent of the allowance used**, from `usage` into `log/usage.jsonl`. This is how much room is left.
 
-[`usage`](../home/bin/usage) asks the endpoint that the Pi extensions [`pi-codex-rate-limits`](https://github.com/scnewma/pi-codex-rate-limits) and [`pi-codex-limit`](https://pi.dev/packages/pi-codex-limit) call, with the same login Pi uses. The endpoint is undocumented and can change without notice, so `--fail` makes a change an error `health` can see rather than a quiet gap in the log. The saved token lasts about ten days and Pi refreshes it when it runs, so `usage` only fails on expiry if Pi has not run in that long.
+[`usage`](../home/bin/usage) asks the endpoint that the Pi extensions [`pi-codex-rate-limits`](https://github.com/scnewma/pi-codex-rate-limits) and [`pi-codex-limit`](https://pi.dev/packages/pi-codex-limit) call, with the same login Pi uses. The endpoint is undocumented and can change without notice, so `--fail` makes a change a failed run whose heartbeat stops, rather than a quiet gap in the log. The saved token lasts about ten days and Pi refreshes it when it runs, so `usage` only fails on expiry if Pi has not run in that long.
 
 The digest reports from both files. `route` runs `usage` before moving a self-directed (`wild-work`) card to `ready`, and leaves it in `backlog` while the weekly figure is at or above 70%, so Zach's requests keep the last part of the week.
 
@@ -203,7 +213,7 @@ What stands between the repository and the state described above. Tick them off 
 - [ ] **Check `scout.md` and `digest.md`** against the real board.
 - [ ] **Prove the membrane.** `receive-mail` and `membrane.md` are written to [MEMBRANE.md](MEMBRANE.md) but have never touched a real mailbox or model. They need a working `send-mail`, and Pi installed as [the guide](ICHABOD-GUIDE.md#5-host) says. The gate, the DMARC check and the output validator are unit tested in `tests/`; the model and the mailbox are not. Confirm Pi reads piped stdin alongside `@membrane.md` in `-p` mode, and that a filed message lands in `Archive`. All four of [its tests](MEMBRANE.md#how-to-test-it) pass before the `receive-mail` line in `home/crontab` is uncommented.
 - [ ] **Clone the fork.** `ich4bod/ichabod-crane` into `src/ichabod-crane`, with `upstream` pointing at `zfleeman/ichabod-crane`, as the `proposing-changes` skill expects.
-- [ ] **Write `health`,** and prove it shouts when a pass has not succeeded. How it shouts when mail is broken is [#69](https://github.com/zfleeman/ichabod-crane/issues/69).
+- [ ] **Prove `health`.** `make apply` for the heartbeat alarms once the box is rebuilt and `make cron` has run. Each scheduled job's alarm goes to `OK` after its first success, and removing `/etc/cron.d/ichabod-schedule` for an hour puts `ichabod-heartbeat-receive-mail` into `ALARM` with an email from SNS.
 
 ### Prove it
 
