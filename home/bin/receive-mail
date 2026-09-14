@@ -51,7 +51,8 @@ LOGIN_ALERT_EVERY_SECONDS = 24 * 3600
 READER = [
     "/usr/bin/env", "-i", "HOME=/tmp", "PATH=/usr/bin",
     f"PI_CODING_AGENT_DIR={HOME}/.pi/agent",
-    "pi", "-p", "--no-tools", "--no-skills", "--no-extensions", "--no-session", "--no-context-files",
+    "pi", "-p", "--model", "openai-codex/gpt-5.6-luna",
+    "--no-tools", "--no-skills", "--no-extensions", "--no-session", "--no-context-files",
     f"@{HOME}/prompts/membrane.md",
 ]  # fmt: skip
 READER_TIMEOUT_SECONDS = 600

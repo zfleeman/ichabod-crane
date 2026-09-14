@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# run <name>   run prompts/<name>.md under pi, with a lock and a timeout.
+# run <name> <model>   run prompts/<name>.md under pi on <model>, with a lock and a timeout.
 # Cron runs this. docs/RUNTIME.md has the reasoning behind Pi's flags; the rest is explained inline.
 set -euo pipefail
-name="$1"
+# The model is an argument so each crontab line holds its pass's schedule and model together.
+name="$1"; model="$2"
 set -a; . /home/ichabod/.config/ichabod/env; set +a
 mkdir -p /home/ichabod/.local/state
 
@@ -30,7 +31,7 @@ cd /home/ichabod/workspace
 # tool calls itself, and --kill-after covers a pi that hangs on the way out.
 rc=0
 timeout --kill-after=60 1800 \
-  pi --mode json --no-session \
+  pi --mode json --no-session --model "$model" \
      --tools read,write,edit,bash,web_search,fetch_content,get_search_content \
      --no-extensions -e /usr/lib/node_modules/pi-web-access \
      --no-skills --skill /home/ichabod/workspace/skills --skill /home/ichabod/workspace/own-skills \

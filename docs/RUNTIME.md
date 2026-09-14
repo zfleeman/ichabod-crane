@@ -58,7 +58,7 @@ Ichabod is root-equivalent and could publish a fake heartbeat. That is accepted,
 
 Ichabod runs on OpenAI models through a ChatGPT Plus subscription on his own account, logged in with Pi. The bill is flat, so the real limit is the subscription's 5-hour and weekly usage windows.
 
-**The strongest model builds; a mid-tier model routes.** The smallest tier is not used for routing, because triage is a judgment call on text an attacker can influence, and getting it wrong is destructive.
+**A mid-tier model builds; the small tier does everything else.** Zach chose this to stretch the Plus allowance. Triage is a judgment call on text an attacker can influence, so watch `route`'s decisions first if the small tier is not good enough. Each pass's model is the second argument on its crontab line, and the membrane's is in `receive-mail`.
 
 **Two numbers stand in for the usage page**, which nothing on the box can read. `run` records tokens per run in `log/cost.jsonl`, which shows how hard each run worked. `usage` records percent of the allowance used in `log/usage.jsonl`, which shows how much room is left. `usage` calls an undocumented endpoint, so it fails loudly and its heartbeat stops when the endpoint changes, rather than leaving a quiet gap in the log.
 
