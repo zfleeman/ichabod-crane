@@ -41,6 +41,11 @@ apply: ## Build or update the infrastructure
 shell: ## Interactive shell on the box, as ssm-user
 	aws ssm start-session --target $(INSTANCE_ID)
 
+ichabod: ## Interactive login shell on the box, as ichabod
+	aws ssm start-session --target $(INSTANCE_ID) \
+	  --document-name AWS-StartInteractiveCommand \
+	  --parameters command="sudo -iu ichabod"
+
 # Two separate questions with one answer: EC2 knows whether the machine is on,
 # SSM knows whether it is reachable. A running box whose agent is dead shows as
 # "running / not answering", which is the case worth spotting.
@@ -105,4 +110,4 @@ alarms: ## Current state of every ichabod alarm
 	aws cloudwatch describe-alarms --alarm-name-prefix ichabod- \
 	  --query 'MetricAlarms[].[AlarmName,StateValue]' --output table
 
-.PHONY: help init check test plan apply shell status stop start deploy cron secret ip alarms
+.PHONY: help init check test plan apply shell ichabod status stop start deploy cron secret ip alarms

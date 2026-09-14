@@ -63,7 +63,7 @@ make secret NAME=KANBOARD_TOKEN
 
 That opens an SSM session straight into [`set-secret`](../home/bin/set-secret) as `ichabod`, which asks for the value with echo off and rewrites that one line of the file. The value is typed, never passed as an argument, so it stays out of shell history, `ps`, and SSM's command history, where parameters are kept. Run it again to replace a value. Avoid opening the file in an editor over `make shell`: the editor shows the values on screen, which Session Manager logging records, and vim leaves swap files behind.
 
-The ChatGPT login is the one secret not in that file. Log in once with `make shell`, then `sudo -iu ichabod`, run `pi`, type `/login`, and choose ChatGPT Plus/Pro (Codex) with the device code option. Pi keeps the token in `/home/ichabod/.pi/agent/auth.json` and refreshes it itself.
+The ChatGPT login is the one secret not in that file. Log in once with `make ichabod`, run `pi`, type `/login`, and choose ChatGPT Plus/Pro (Codex) with the device code option. Pi keeps the token in `/home/ichabod/.pi/agent/auth.json` and refreshes it itself.
 
 # 4. Infrastructure
 
@@ -110,7 +110,21 @@ Everything below runs from `make shell`, which lands as `ssm-user` with password
    ```
 
    This puts `node` and `pi` in `/usr/bin`, owned by root. `receive-mail` starts the membrane with `PATH=/usr/bin` and nothing else, so a `pi` installed anywhere else makes every email fail. Root ownership also means Ichabod cannot swap the `pi` the membrane runs. Check all three: `env -i PATH=/usr/bin pi --version` prints a version, `sudo -u ichabod bash -lc 'command -v pi'` prints `/usr/bin/pi`, and `ls -l /usr/bin/pi` shows root. `pi-web-access` lands in `/usr/lib/node_modules`, which is the path `run` loads it from. To upgrade, change the pins here and rerun these lines.
-10. As `ichabod`, generate an SSH key with `ssh-keygen -t ed25519` and add the public half to `ich4bod` as an account key. Set `git config --global user.name` and `user.email` to Ichabod's.
+10. From `make ichabod`, generate one SSH key that both pushes and signs commits. It has no passphrase because cron uses it unattended, and a second key would sit in the same directory, so it would isolate nothing. Add the public half to `ich4bod` twice, once as an Authentication Key and once as a Signing Key. GitHub marks commits Verified only when `user.email` is a verified email on `ich4bod`.
+
+    ```
+    ssh-keygen -t ed25519 -N '' -C ichabod -f ~/.ssh/id_ed25519
+    git config --global user.name '<name>'
+    git config --global user.email '<email>'
+    git config --global gpg.format ssh
+    git config --global user.signingkey ~/.ssh/id_ed25519.pub
+    git config --global commit.gpgsign true
+    git config --global tag.gpgsign true
+    echo "$(git config user.email) namespaces=\"git\" $(cat ~/.ssh/id_ed25519.pub)" > ~/.ssh/allowed_signers
+    git config --global gpg.ssh.allowedSignersFile ~/.ssh/allowed_signers
+    ```
+
+    The allowed signers file lets `git log --show-signature` verify Ichabod's signatures on the box.
 
 Then, from the laptop, `make deploy` and `make secret` for each name in [`env.example`](../home/.config/ichabod/env.example).
 
