@@ -43,7 +43,7 @@ The schedule is [`home/crontab`](../home/crontab), installed as `/etc/cron.d/ich
 |---|---|
 | `route` | Read the board and decide: triage new cards, pick the next `ready` card, recover stale ones, close verified `review` cards |
 | `work` | Take the top `ready` card, do it, comment what happened on the card, move the column |
-| `scout` | Turn open GitHub issues into cards, then propose at most one piece of self-directed work |
+| `scout` | Turn Zach's open GitHub issues into cards, then propose at most one piece of self-directed work |
 | `digest` | One email a day: what finished, what is blocked, usage |
 
 **Reasoning goes on the card as a comment.** The board is the queue and the record, so the journal in `memory/` only holds what does not belong to a card.
@@ -200,7 +200,7 @@ What stands between the repository and the state described above. Tick them off 
 - [ ] **Prove `send-mail`** with a real email arriving with the right envelope sender, and a `--in-reply-to` reply threading under the original in Gmail. Its rules are unit tested in `tests/`; the real mailbox is not.
 - [ ] **Write `route.md` and delete `director.md`.** `director.md` is still written against the old workboard CLI. Carry over what it learned: read `backlog` before concluding there is nothing to do, dispatch one build-heavy card at a time, treat a `running` card that has not moved in an hour as stuck, close `review` only on work actually watched, and check `MEMORY.md` against its band. Add the `usage` check from [Models and usage](#models-and-usage) before a `wild-work` card moves to `ready`, and have `scout.md` skip its proposal at the same threshold. Drop the projection one-liner and the twin-card workaround, since Kanboard returns small results and tasks can be edited in place.
 - [ ] **Write `work.md`.** Uncomment the `route` and `work` lines in `home/crontab` once both prompts exist.
-- [ ] **Check `scout.md` and `digest.md`** against the real board, after [#68](https://github.com/zfleeman/ichabod-crane/issues/68) decides whether strangers' issues reach `scout` at all.
+- [ ] **Check `scout.md` and `digest.md`** against the real board.
 - [ ] **Prove the membrane.** `receive-mail` and `membrane.md` are written to [MEMBRANE.md](MEMBRANE.md) but have never touched a real mailbox or model. They need a working `send-mail`, and `pi` resolvable on `PATH=/usr/bin`. The gate, the DMARC check and the output validator are unit tested in `tests/`; the model and the mailbox are not. Confirm Pi reads piped stdin alongside `@membrane.md` in `-p` mode, and that a filed message lands in `Archive`. All four of [its tests](MEMBRANE.md#how-to-test-it) pass before the `receive-mail` line in `home/crontab` is uncommented.
 - [ ] **Clone the fork.** `ich4bod/ichabod-crane` into `src/ichabod-crane`, with `upstream` pointing at `zfleeman/ichabod-crane`, as the `proposing-changes` skill expects.
 - [ ] **Write `health`,** and prove it shouts when a pass has not succeeded. How it shouts when mail is broken is [#69](https://github.com/zfleeman/ichabod-crane/issues/69).
