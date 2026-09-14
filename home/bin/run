@@ -26,9 +26,10 @@ cd /home/ichabod/workspace
 # 9>&- keeps the lock out of pi, so a process Ichabod leaves running in the background cannot hold it forever.
 # pi's stderr gets a file beside its log, so passes running at once never mix their output in log/run.log.
 # rc is pi's exit code, kept so a failed pass still gets its cost line before this script exits with it.
-# timeout recovers a hung pass; its log up to the kill survives.
+# timeout recovers a hung pass; its log up to the kill survives. On SIGTERM pi kills its running bash
+# tool calls itself, and --kill-after covers a pi that hangs on the way out.
 rc=0
-timeout 1800 \
+timeout --kill-after=60 1800 \
   pi --mode json --no-session \
      --tools read,write,edit,bash,web_search,fetch_content,get_search_content \
      --no-extensions -e /usr/lib/node_modules/pi-web-access \
@@ -38,12 +39,27 @@ timeout 1800 \
 # Most runs print nothing there, and an empty file is only clutter.
 [ -s "$err" ] || rm -f "$err"
 
-# Tokens per run, one line per pass. Field names are a guess until someone reads
-# a real event; do not trust this jq as written.
+# Tokens per run, one line per pass, summed over the model's replies. preamble is the first reply's input:
+# everything the model was handed before it acted. input excludes cache_read, so add them for the true size.
 # A crashed pi can leave a log that is not JSON; say so rather than let set -e replace pi's exit code with jq's.
-jq -cs '[.[] | .usage // empty] | {pass: "'"$name"'",
-       in: (map(.input_tokens) | add), out: (map(.output_tokens) | add)}' \
-  "$out" >> /home/ichabod/log/cost.jsonl || echo "$(date +%FT%T%z) run: no cost line for $name, $out is not JSON" >&2
+stop=unknown
+if cost="$(jq -cs --arg pass "$name" '
+    [.[] | select(.type == "message_end" and .message.role == "assistant") | .message] |
+    {at: (now | todate), pass: $pass, model: last.model, replies: length,
+     preamble: (first.usage | .input + .cacheRead),
+     input: (map(.usage.input) | add), cache_read: (map(.usage.cacheRead) | add),
+     output: (map(.usage.output) | add), stop: (last.stopReason // "none")}' "$out")"; then
+  echo "$cost" >> /home/ichabod/log/cost.jsonl
+  stop="$(jq -r .stop <<< "$cost")"
+else
+  echo "$(date +%FT%T%z) run: no cost line for $name, $out is not JSON" >&2
+fi
+
+# --mode json exits 0 even when the model call failed, so only a last reply that ended normally is a success.
+if [ "$rc" = 0 ] && [ "$stop" != stop ]; then
+  echo "$(date +%FT%T%z) run: $name ended with stopReason $stop" >&2
+  rc=1
+fi
 
 # health turns this into a CloudWatch heartbeat.
 if [ "$rc" = 0 ]; then touch "/home/ichabod/.local/state/$name.ok"; fi
