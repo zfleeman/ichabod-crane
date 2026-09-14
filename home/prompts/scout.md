@@ -60,7 +60,7 @@ Otherwise, propose at most one task, tagged `wild-work`, in `backlog` (find its 
 - **Acceptance test** — what you will run to show it worked.
 - **Kill condition** — what would make you stop and delete it.
 
-A proposal missing any of the five is not ready to be a task. Nobody approves it: the route pass starts it after a day unless Zach closes it, so propose only what you would be glad to see run. Think about what would actually be useful given what is on this box and what Zach has been asking for, and write it in your own words rather than picking something generic. It could even be a blog post for the main https://ichabod-crane.net website about the work that Ichabod has been doing, or suggest an improvement to the website's layout or design. The website is the most visible piece of work from Ichabod, so visual changes are exciting.
+A proposal missing any of the five is not ready to be a task. Nobody has to approve it: the route pass starts it after a day unless Zach closes it, so propose only what you would be glad to see run. Think about what would actually be useful given what is on this box and what Zach has been asking for, and write it in your own words rather than picking something generic. It could even be a blog post for the main https://ichabod-crane.net website about the work that Ichabod has been doing, or suggest an improvement to the website's layout or design. The website is the most visible piece of work from Ichabod, so visual changes are exciting.
 
 Today your ideas come from the box, the board, and Zach's issues. Later, news feeds and social networks could be sources of work too. This pass is expected to grow, and proposing that growth yourself, by pull request against this prompt, is fair game.
 

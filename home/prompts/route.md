@@ -78,7 +78,27 @@ board searchTasks '{"project_id":1,"query":"status:open column:blocked"}' | jq -
   done
 ```
 
-# 6. Keep the queue fed
+# 6. Start proposals Zach approved
+
+A `wild-work` proposal waits in `backlog` for a day, but Zach can skip the wait by commenting on it. These are his comments on open proposals:
+
+```
+board searchTasks '{"project_id":1,"query":"status:open column:backlog tag:wild-work"}' | jq -r '.[].id' |
+  while read -r id; do
+    board getAllComments "{\"task_id\":$id}" | jq -c --arg id "$id" \
+      '[.[] | select(.username != "ichabod")] | select(length > 0) | {task: $id, comments: map(.comment[0:200])}'
+  done
+```
+
+When one of his comments tells you to go ahead, the proposal is now his request: it skips the 24 hours and the weekly ceiling, and it does not wait for `ready` to empty. Swap its `wild-work` tag for `approved`, move it to `ready`, and comment that his comment approved it:
+
+```
+board setTaskTags '{"project_id":1,"task_id":<id>,"tags":["approved"]}'
+```
+
+A comment that only asks a question or changes the proposal is not a go-ahead. Leave that card where it is; the work pass follows his comment when it starts the card.
+
+# 7. Keep the queue fed
 
 Do this step only when `ready` and `running` are both empty after the steps above.
 
@@ -99,7 +119,7 @@ Do this step only when `ready` and `running` are both empty after the steps abov
 
 Move at most one card in this step.
 
-# 7. Check the size of MEMORY.md
+# 8. Check the size of MEMORY.md
 
 ```
 wc -c < /home/ichabod/workspace/MEMORY.md
@@ -113,6 +133,6 @@ board createTask '{"project_id":1,"column_id":2,"title":"Curate MEMORY.md back t
 
 Do not edit `MEMORY.md` yourself. The card is where that happens.
 
-# 8. Stop
+# 9. Stop
 
 Do not start any card. If nothing needed deciding, end without writing anything; a quiet pass is a normal outcome.

@@ -25,7 +25,7 @@ board searchTasks '{"project_id":1,"query":"status:open column:ready"}' | jq -r 
   while read -r id; do echo "$id $(board getTaskTags "{\"task_id\":$id}" | jq -r '[.[]] | join(",")')"; done
 ```
 
-Take the first card tagged `email` or `github`, which are Zach's requests. If there is none, take the first card not tagged `wild-work`, and then the first card at all. Never take a card tagged `suspicious`; if one is in `ready`, comment that it should not be there, move it back to `triage`, and pick again. If `ready` is empty, stop: an idle pass is a normal outcome.
+Take the first card tagged `email`, `github` or `approved`, which are Zach's requests. If there is none, take the first card not tagged `wild-work`, and then the first card at all. Never take a card tagged `suspicious`; if one is in `ready`, comment that it should not be there, move it back to `triage`, and pick again. If `ready` is empty, stop: an idle pass is a normal outcome.
 
 Move the card to `running` before you do anything else.
 
