@@ -15,7 +15,7 @@ Cover only what has something to report:
 - **Blocked** — and exactly what would unblock it.
 - **Failed** — with the error, the same day it happened.
 - **Proposed** — any `wild-work` task waiting for a yes or no.
-- **Attention** — disk above 75%, a task `receive-mail` marked suspicious, anything else Zach would want to know before he asks.
+- **Attention** — disk above the limit in `AGENTS.md`, a task `receive-mail` marked suspicious, anything else Zach would want to know before he asks.
 - **Usage** — run `/home/ichabod/bin/usage` for the 5-hour and weekly percent used, and total the last 24 hours of `/home/ichabod/log/cost.jsonl` by pass. Every pass and worker draws on one ChatGPT Plus allowance, so report it whenever the weekly figure moved meaningfully from the day before or a run hit the usage limit, and say what spent it — cadence, a long-running task, an oversized journal. Say plainly if the numbers are unavailable rather than estimating them.
 - **Journal size** — if yesterday's `memory/` directory totals more than ~40 KB, say so and name the biggest entries. A contents page nobody can read in one screen stops being useful.
 

@@ -365,12 +365,12 @@ resource "aws_cloudwatch_metric_alarm" "disk_urgent" {
 # crontab. A job still commented out in the crontab sits in ALARM until its line is enabled.
 resource "aws_cloudwatch_metric_alarm" "heartbeat" {
   for_each = {
-    receive-mail = 2  # every 30 minutes
-    usage        = 3  # hourly
-    route        = 3  # hourly
-    work         = 6  # every 2 hours
-    scout        = 12 # every 4 hours
-    digest       = 26 # daily
+    receive-mail = 2
+    usage        = 3
+    route        = 3
+    work         = 6
+    scout        = 12
+    digest       = 26
   }
 
   alarm_name          = "ichabod-heartbeat-${each.key}"
