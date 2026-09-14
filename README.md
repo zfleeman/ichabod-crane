@@ -67,11 +67,12 @@ docs/        MEMBRANE.md is the trust boundary and the one to read first
              ICHABOD-GUIDE.md is the host, the web layer, and operations
 tofu/        The machine, DNS, alarms. Zach applies it; Ichabod never does
 home/        Mirrors /home/ichabod on the box
-  bin/       Commands: run-pass, board, usage
+  bin/       Commands: run-pass, board, usage, backup-workspace
   prompts/   What cron runs (director, scout, digest; still OpenClaw versions, to be ported)
   workspace/ Identity and operating rules, plus skills/ for procedures he only sometimes needs. His own skills live in own-skills/ on the box, not here
   templates/ The starting compose file for an application
   crontab    The schedule
+  .config/ichabod/env.example   Every secret the scripts read, with no values
 ```
 
 Where a new capability goes: a command he runs is a script in `home/bin/`, a procedure he follows is a skill in `home/workspace/skills/`, and something on a schedule is a prompt in `home/prompts/` plus a `crontab` line. No Pi extensions and no MCP servers: under Pi his only tools are `read`, `write`, `edit` and `bash`, and everything else is a script he calls.
