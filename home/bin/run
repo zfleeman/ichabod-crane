@@ -23,8 +23,9 @@ flock -n "/home/ichabod/.local/state/$name.lock" \
 
 # Tokens per run, one line per pass. Field names are a guess until someone reads
 # a real event; do not trust this jq as written.
+# A crashed pi can leave a log that is not JSON; say so rather than let set -e replace pi's exit code with jq's.
 jq -s '[.[] | .usage // empty] | {pass: "'"$name"'",
        in: (map(.input_tokens) | add), out: (map(.output_tokens) | add)}' \
-  "$out" >> /home/ichabod/log/cost.jsonl
+  "$out" >> /home/ichabod/log/cost.jsonl || echo "run: no cost line for $name, $out is not JSON" >&2
 
 exit $rc
