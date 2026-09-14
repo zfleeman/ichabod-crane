@@ -38,7 +38,7 @@ Destroying a named volume usually destroys the only copy of an application's dat
 
 Everything you run shares one `t3a.large`. These are the ceilings. Only the application container limits are enforced by Docker; the rest hold because this file says so, which means you are the one enforcing them.
 
-- One build-heavy or browser-heavy card at a time. That holds until Zach raises it, whatever the board is willing to dispatch.
+- One build-heavy or browser-heavy card at a time. That holds until Zach raises it.
 - At most five experimental services running at once. Check with `docker compose ls` before starting a sixth, and retire one rather than adding to the pile.
 - Every application container under `/home/ichabod/apps/` gets `cpus: "0.50"` and `mem_limit: 512m` unless the card says otherwise and says why. Those numbers are a blast radius, not a budget, and are raised from a measured peak on the card, never from an estimate.
 - Traefik under `/home/ichabod/platform/` sits outside that rule and is unbounded. Do not put a limit on it without a card carrying a measured peak.
@@ -82,13 +82,14 @@ Past that, choose your own work: one self-chosen card at a time, never more, and
 
 # Memory
 
-- `memory/YYYY-MM-DD/` is the journal: one file per pass or per card, named `NN-HHMM-director.md` or `NN-HHMM-card-<first8>.md`. `NN` is the entry's position in the day and is what keeps the directory in chronological order — a heading without a clock time would otherwise sort to the top. Inside an entry, append freely — what you tried, what broke, the command that finally worked, the URL.
-- `memory/YYYY-MM-DD.md` is that day's contents page: one line per entry, `HHMM-name — what it covers`. Add a line when you add an entry. It should stay readable in one screen.
-- **Never open a whole day.** Read the contents page, then open only the entries you actually need. A file you open stays in the session and is re-sent on every turn after it.
-- **The journal is not what fills a context window.** Measured on 2026-09-10, everything a pass read out of `memory/` was under 3% of it; the fixed preamble was most of the rest. Keep the journal lean because a contents page nobody can read in one screen stops being useful. When a pass runs out of window, measure the preamble first.
+- **Reasoning about a card goes on that card**, as a comment with `board createComment`. The board is the record of the work.
+- `memory/YYYY-MM-DD/` is the journal, for what is worth keeping and does not belong to one card: a lesson about the box, a debugging trail that spans cards, a maintenance finding, the command that finally worked. One file per entry, named `NN-HHMM-<topic>.md`. `NN` is the entry's position in the day and keeps the directory in order. Card detail too long for a comment goes in `NN-HHMM-card-<id>.md`, and the card links to it.
+- A pass with nothing worth keeping writes nothing. An empty journal day is normal.
+- `memory/YYYY-MM-DD.md` is that day's contents page: one line per entry, `HHMM-<topic> — what it covers`. Add a line when you add an entry. It should stay readable in one screen.
+- **Never open a whole day.** Read the contents page, then open only the entries you actually need, or `grep -r` across `memory/` for something older. A file you open stays in the run and is re-sent on every turn after it.
 - `MEMORY.md` is the curated index, and it holds durable conclusions only: decisions and their reasons, lessons that changed how you work, stable facts about the estate.
-- **`MEMORY.md` works to a band, not a single cap: curate when it passes 5,500 characters, and curate back to about 4,000.** Curating to just under the trigger is the failure mode, not the goal — the gap between the two numbers is what stops one new lesson from immediately tripping the next card. A promotion measured across 2026-09-10 adds 286–624 characters, so a band narrower than about 1,500 cannot absorb even two of them.
-- **The promotion rule:** when a daily log produces something that will still matter in a month, write one line into `MEMORY.md` and leave the detail in the journal. When a curation card takes you past 5,500, delete the entries that stopped being true. It is a working set, not an archive.
+- **`MEMORY.md` works to a band, not a single cap: curate when it passes 5,500 characters, and curate back to about 4,000.** Curating to just under the trigger is the failure mode, not the goal. One promotion adds roughly 300 to 600 characters, so a band narrower than about 1,500 cannot absorb even two of them before tripping the next curation.
+- **The promotion rule:** when a journal entry or a card produces something that will still matter in a month, write one line into `MEMORY.md` and leave the detail behind. When a curation takes you past 5,500, delete the entries that stopped being true. It is a working set, not an archive.
 
 # Procedures
 

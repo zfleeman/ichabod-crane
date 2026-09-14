@@ -200,12 +200,11 @@ What stands between the repository and the state described above. Tick them off 
 - [ ] **Stand up the board.** Kanboard on the Synology with the `ichabod` user and token, two-factor on Zach's own login, the plugin installer off, and columns triage, backlog, ready, running, review, blocked, done. `board createTask` works from inside Pi's `bash`.
 - [ ] **Write `send-mail`,** and prove it with a real email arriving with the right envelope sender, and a `--in-reply-to` reply threading under the original in Gmail.
 - [ ] **Write `route.md` and delete `director.md`.** `director.md` is still written against the old workboard CLI. Carry over what it learned: read `backlog` before concluding there is nothing to do, dispatch one build-heavy card at a time, treat a `running` card that has not moved in an hour as stuck, close `review` only on work actually watched, and check `MEMORY.md` against its band. Add the `usage` check from [Models and usage](#models-and-usage) before a `wild-work` card moves to `ready`, and have `scout.md` skip its proposal at the same threshold. Drop the projection one-liner and the twin-card workaround, since Kanboard returns small results and tasks can be edited in place.
-- [ ] **Write `work.md`.**
+- [ ] **Write `work.md`.** Uncomment the `route` and `work` lines in `home/crontab` once both prompts exist.
 - [ ] **Check `scout.md` and `digest.md`** against the real board.
 - [ ] **Prove the membrane.** `receive-mail` and `membrane.md` are written to [MEMBRANE.md](MEMBRANE.md) but have never touched a real mailbox or model. They need `send-mail`, which `receive-mail` calls as `send-mail <subject>` with the body on stdin, and `pi` resolvable on `PATH=/usr/bin`. Confirm Pi reads piped stdin alongside `@membrane.md` in `-p` mode, and that a filed message lands in `Archive`. All four of [its tests](MEMBRANE.md#how-to-test-it) pass before the `receive-mail` line in `home/crontab` is uncommented.
 - [ ] **Clone the fork.** `ich4bod/ichabod-crane` into `src/ichabod-crane`, with `upstream` pointing at `zfleeman/ichabod-crane`, as the `proposing-changes` skill expects.
 - [ ] **Write `health`,** and prove it shouts when a pass has not succeeded.
-- [ ] **Finish `AGENTS.md` against the real stack.** Its memory section still names `director` journal entries and a journal entry per pass; bring it in line with [Memory](#memory), where reasoning about a card goes on the card.
 
 ### Prove it
 
