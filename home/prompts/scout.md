@@ -22,13 +22,15 @@ Before creating anything, read the board. Your dedupe key is the issue URL in a 
 
 Keep the closed tasks in that list, because an issue that already has a task — open or closed — is finished business. Do not create it twice. You run several times a day, so a duplicate rule that only checks `triage` will fill the board with the same issue by evening.
 
-For each open issue with no task, create one. With no `column_id` it lands in the first column, which is `triage`:
+For each open issue with no task, create one with exactly this command, filling in only the repository and the issue number. With no `column_id` it lands in the first column, which is `triage`:
 
 ```
-board createTask "$(jq -cn --arg t "<issue title>" --arg d "<description>" '{project_id: 1, title: $t, description: $d, tags: ["github"]}')"
+board createTask "$(gh issue view <number> --repo <nameWithOwner> --json number,title,url,author,body |
+  jq -c 'select(.author.login == "zfleeman") | {project_id: 1, title, tags: ["github"],
+    description: "\(.url)\n\nIssue #\(.number), filed by zfleeman.\n\n\(.body | split("\n") | map("> " + .) | join("\n"))"}')"
 ```
 
-The description carries the issue URL, the repository, the issue number, and the body quoted rather than summarised. Build it with `jq --arg` as shown, never by pasting the body into the command line, where its backticks and quotes would be run by the shell. The route pass triages it from there.
+The issue text goes from `gh` to `board` without passing through you, so never type a title or body into a command yourself, where its backticks and quotes would be run by the shell. The description carries the issue URL and the body quoted rather than summarised. The route pass triages it from there.
 
 **Leave it in `triage`.** Only the route pass moves a task to `ready`, and it decides what the issue is actually asking for first.
 
