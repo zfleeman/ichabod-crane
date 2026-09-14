@@ -86,5 +86,5 @@ Ichabod runs on OpenAI models through a ChatGPT Plus subscription on his own acc
 - **No model fallback.** A provider outage fails the pass, and the next scheduled run tries again.
 - **No dashboard.** Kanboard shows the board, and everything else is `jq` over `log/`. If that gets old, switch to `--session-dir` and `pi --export` turns any run into a web page.
 - **Shell and Python instead of typed plugins.** Easier to read, and easier to get subtly wrong.
-- **A new agent is a prompt file and a cron line.** Smaller, and less interesting, than a multi-agent framework.
+- **A new pass is a prompt file and a cron line.** Smaller, and less interesting, than a multi-agent framework.
 - **Secrets are not hidden from the model.** A variable sourced from the env file is one `env` call away from a transcript. `ichabod` is root-equivalent regardless, and the membrane, the one process that is not trusted, inherits none of them.
