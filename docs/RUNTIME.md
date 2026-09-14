@@ -100,7 +100,7 @@ memory/
 
 [`run`](../home/bin/run) is the whole harness.
 
-- **`flock -n`** is the concurrency rule: if the previous run of that pass is still going, this one exits rather than stacking.
+- **`flock -n`** is the concurrency rule: if the previous run of that pass is still going, this one exits 0 rather than stacking, and leaves no log, cost line or success marker.
 - **`timeout`** is stall recovery. A pass that hangs is killed, and its log up to the kill survives.
 - **`rc` is Pi's exit code**, where 0 means success. `run` saves it instead of letting `set -e` stop the script on a failure, so a failed pass still gets its line in `cost.jsonl`, and then exits with that code so a failed pass leaves no success marker for `health`.
 - **It `cd`s into `workspace/`**, because Pi has no working-directory flag and finds `AGENTS.md` in the directory it starts in.
@@ -204,7 +204,6 @@ What stands between the repository and the state described above. Tick them off 
 - [ ] **Prove Pi.** Run `scout.md` by hand, and measure the real preamble off the first usage event. Confirm whether `-p` is shorthand for `--mode print`, so no script combines two modes that silently override each other.
 - [ ] **Fix `run`'s cost line.** Its `jq` guesses at the usage field names; read a real `--mode json` stream and correct it.
 - [ ] **Make `timeout` kill Pi's children.** `timeout` signals its direct child, so a `bash` tool call can outlive it and keep spending. Check it, and add `--kill-after` or a process-group kill if needed.
-- [ ] **Tell a skipped run from a failed one.** A run skipped by the lock exits 1 and leaves an empty log. `flock -n -E 75` with a clean early exit on 75 fixes that.
 - [ ] **Settle the allowance.** Log in to Ichabod's ChatGPT Plus account with Pi's device code login, pick the models for each job and give `run` a `--model` per pass, and prove `usage` works headless. Run the crontab for a day, then a day with workers, and check whether either hits the 5-hour or weekly limit. Workers on the strongest model are where the usage lives.
 - [ ] **Stand up the board.** Kanboard on the Synology with the `ichabod` user and token, two-factor on Zach's own login, the plugin installer off, and columns triage, backlog, ready, running, review, blocked, done. `board createTask` works from inside Pi's `bash`.
 - [ ] **Prove `send-mail`** with a real email arriving with the right envelope sender, and a `--in-reply-to` reply threading under the original in Gmail. Its rules are unit tested in `tests/`; the real mailbox is not.

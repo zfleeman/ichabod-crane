@@ -14,12 +14,19 @@ cd /home/ichabod/workspace
 # --no-extensions because an extension can add tools and preamble.
 # rc is pi's exit code, kept so a failed pass still gets its cost line before this script exits with it.
 rc=0
-flock -n "/home/ichabod/.local/state/$name.lock" \
+flock -n -E 75 "/home/ichabod/.local/state/$name.lock" \
   timeout 1800 \
   pi --mode json --tools read,write,edit,bash --no-session \
      --no-extensions --no-skills \
      --skill /home/ichabod/workspace/skills --skill /home/ichabod/workspace/own-skills \
      @"/home/ichabod/prompts/$name.md" > "$out" || rc=$?
+
+# 75 means the lock was held: the previous run is still going. Not a failure, and nothing ran to log or cost.
+if [ "$rc" = 75 ]; then
+  rm -f "$out"
+  echo "run: $name skipped, the previous run still holds the lock" >&2
+  exit 0
+fi
 
 # Tokens per run, one line per pass. Field names are a guess until someone reads
 # a real event; do not trust this jq as written.
