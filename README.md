@@ -10,11 +10,13 @@ Inspired by Jason Rohrer's autonomous AI project, whose clone kit — written by
 
 Zach sends an email. A reader with no tools turns it into a card on a board. The main agent picks the card up, does the work on the host, and replies. Nothing else can talk to it.
 
+## Status
+
+The repository describes the box as it should be, not as it is today. What is left to build, prove, and decide is the [Open actions](docs/RUNTIME.md#open-actions) list; delete an item when it is done.
+
 ## Why Pi
 
-**Ichabod runs on Pi and cron.** It used to run on OpenClaw, on an instance that is destroyed and rebuilt for the switch; the plan is [docs/PI-MIGRATION.md](docs/PI-MIGRATION.md).
-
-The short reason: a routing pass under OpenClaw carried 38,831 tokens of preamble before it did anything, about a third of which was not ours to control and roughly half of the rest tool schemas. Pi is four tools and a short system prompt, driven from a crontab.
+**Ichabod runs on Pi and cron.** Every turn re-sends the model's preamble, so framework tokens come out of the same allowance as the work. Pi is four tools and a short system prompt, driven from a crontab, and [docs/RUNTIME.md](docs/RUNTIME.md#why-pi-and-cron) has the measurement behind that choice.
 
 ## How it works
 
@@ -35,7 +37,7 @@ email ──> intake ──> pi, no tools ──> validated card ──> run-pas
 
 ## How this differs from the clone kit
 
-The kit is one Claude Code process in a terminal, running `--dangerously-skip-permissions` in a five-minute loop, persisting through markdown files, restarted by a cron watchdog when it freezes. It works, it is simple, and it is running today. This migration moves Ichabod most of the way toward it, deliberately, with one exception.
+The kit is one Claude Code process in a terminal, running `--dangerously-skip-permissions` in a five-minute loop, persisting through markdown files, restarted by a cron watchdog when it freezes. It works, it is simple, and it is running today. Ichabod is deliberately close to it, with one exception.
 
 | | Clone kit | Ichabod |
 |---|---|---|
@@ -47,9 +49,9 @@ The kit is one Claude Code process in a terminal, running `--dangerously-skip-pe
 
 The kit optimizes for **never stopping**. This project optimizes for **never trusting the input**. The kit's loop instructions say "NEVER STOP THE LOOP" because a stalled agent is the failure it fears most. Here, the failure we design against is an email talking a root-equivalent agent into running something.
 
-## What went wrong, and what it taught
+## Verify by asking the live system
 
-Almost every bug in this project was the same bug wearing a different hat: **the check reported health while answering a different question than the one asked.** A config validator passed on an agent that was not sandboxed at all. A sandbox report printed `runtime: sandboxed` for a reader that had a shell, Docker and the network. A service check said `inactive` for a user unit that was serving fine. A healthy Traefik logs nothing, which reads exactly like a dead one.
+Almost every bug in this project's history was the same bug wearing a different hat: **the check reported health while answering a different question than the one asked.** A config validator passed on an agent that was not sandboxed at all. A sandbox report printed `runtime: sandboxed` for a reader that had a shell, Docker and the network. A service check said `inactive` for a user unit that was serving fine. A healthy Traefik logs nothing, which reads exactly like a dead one.
 
 **The verification that works is asking the live system what it can actually do** — calling the tool and watching what happens, not reading its config. Every real defect here was found that way.
 
@@ -63,13 +65,13 @@ Three failure shapes worth designing against, because they are worse than an err
 
 ```
 docs/        MEMBRANE.md is the trust boundary and the one to read first
-             PI-MIGRATION.md is the plan and build order
+             RUNTIME.md is Pi, cron, the board, and the open actions
              ICHABOD-GUIDE.md is the host, the web layer, and operations
 tofu/        The machine, DNS, alarms. Zach applies it; Ichabod never does
 scripts/     deploy and install-home, behind make deploy
 home/        Mirrors /home/ichabod on the box
   bin/       Commands: run-pass, board, usage, backup-workspace, set-secret
-  prompts/   What cron runs (director, scout, digest; still OpenClaw versions, to be ported)
+  prompts/   What cron runs, one file per pass
   workspace/ Identity and operating rules, plus skills/ for procedures he only sometimes needs. His own skills live in own-skills/ on the box, not here
   templates/ The starting compose file for an application
   crontab    The shipped schedule, installed by make cron

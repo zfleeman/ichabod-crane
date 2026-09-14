@@ -1,6 +1,6 @@
 # Ichabod guide
 
-How the box is built and why: the machine, the accounts, the host, the web layer, and how to run it day to day. The agent runtime on top of it — Pi, cron, the board and the mail membrane — is [PI-MIGRATION.md](PI-MIGRATION.md) and [MEMBRANE.md](MEMBRANE.md). Nothing in this document depends on which harness drives the model.
+How the box is built and why: the machine, the accounts, the host, the web layer, and how to run it day to day. The agent runtime on top of it — Pi, cron, the board and the mail membrane — is [RUNTIME.md](RUNTIME.md) and [MEMBRANE.md](MEMBRANE.md). Nothing in this document depends on which harness drives the model.
 
 This is a personal autonomous lab, not a production platform. The agent gets root-equivalent Docker access because that freedom is part of the experiment, and the matching rule is simple: nothing on the machine should be irreplaceable or dangerous to lose.
 
@@ -108,7 +108,7 @@ Everything below runs from `make shell`, which lands as `ssm-user` with password
 | `/home/ichabod/backups/` | Staging before a backup leaves the box | Copied off-host |
 | `/var/lib/docker/` | Images, layers, build cache, named volumes | Volume by volume, never wholesale |
 
-The runtime's own directories are laid out in [PI-MIGRATION.md](PI-MIGRATION.md#target-architecture). `/var/lib/docker` is what fills the disk; `docker system df` is the thing to watch.
+The runtime's own directories are laid out in [RUNTIME.md](RUNTIME.md#layout). `/var/lib/docker` is what fills the disk; `docker system df` is the thing to watch.
 
 # 6. Administration
 

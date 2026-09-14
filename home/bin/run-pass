@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # run-pass <name>   run prompts/<name>.md under pi, with a lock and a timeout.
-# Cron runs this. See docs/PI-MIGRATION.md for why each piece is here.
+# Cron runs this. See docs/RUNTIME.md for why each piece is here.
 set -euo pipefail
 name="$1"
 set -a; . /home/ichabod/.config/ichabod/env; set +a
