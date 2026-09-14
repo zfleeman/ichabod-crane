@@ -217,7 +217,7 @@ One layer at a time, with a current backup, the old version recorded and the rel
 Least to most severe:
 
 1. Comment out the crontab lines — intake first, then the passes.
-2. Revoke the mailbox app password and the GitHub token, and sign the box out of ChatGPT.
+2. Revoke the mailbox app passwords and the GitHub token, and sign the box out of ChatGPT.
 3. `docker compose down` in one application's directory.
 4. `make stop`.
 5. If compromise is suspected: remove public ingress, revoke credentials, snapshot the disk, and investigate a copy.

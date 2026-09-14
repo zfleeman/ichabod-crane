@@ -25,4 +25,7 @@ flock -n "/home/ichabod/.local/state/$name.lock" \
 jq -s '[.[] | .usage // empty] | {pass: "'"$name"'",
        in: (map(.input_tokens) | add), out: (map(.output_tokens) | add)}' \
   "$out" >> /home/ichabod/log/cost.jsonl
+
+# Back up workspace/ even after a failed pass. A refused backup fails the run so health sees it.
+/home/ichabod/bin/backup-workspace || rc=$?
 exit $rc

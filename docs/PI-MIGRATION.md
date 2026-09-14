@@ -59,7 +59,7 @@ One box, one Unix user, six scripts, one crontab. The repo's [`home/`](../home) 
     route.md  work.md  scout.md  digest.md  membrane.md
   workspace/      AGENTS.md, IDENTITY.md, SOUL.md, USER.md, MEMORY.md, memory/, skills/, own-skills/
   log/            YYYY-MM-DD/HHMM-<pass>.jsonl, one per run
-  .config/ichabod/env  0600, tokens and passwords, sourced by the wrappers
+  .config/ichabod/env  0600, tokens and passwords, sourced by the wrappers; env.example lists them
 ```
 
 `ichabod` runs every pass, every worker, and the membrane wrapper, and holds Docker, `gh`, the ChatGPT login and the mailbox. The membrane runs as `ichabod` rather than as a user of its own — see [MEMBRANE.md](MEMBRANE.md#what-we-deliberately-gave-up) for what that costs and how the isolation is kept anyway.
@@ -135,7 +135,7 @@ Kanboard's API does not need any of that. It is JSON-RPC over HTTP with basic au
 
 **That costs zero preamble tokens.** `bash` is already one of Pi's four tools; the wrapper needs no schema, only three lines of usage in `route.md`. Compare that to a schema per board method on every request. It is also strictly more debuggable — you can run `board getAllTasks '{"project_id":1}'` yourself in a shell and see exactly what the agent sees, which is the verification style this project has learned to trust.
 
-**Ichabod authenticates as his own Kanboard user, not with the global `jsonrpc` token.** The instance exists only for him, so the `ichabod` user is an admin. The user token still beats the global one: comments and moves are attributed to Ichabod, and his token can be revoked on its own. Two things go with admin rights. Zach keeps a separate admin account, so Ichabod can never lock him out. And the plugin installer is off (`PLUGIN_INSTALLER=false`), because Kanboard plugins are PHP, and an admin who can install one can run code on the Synology, which is outside Ichabod's boundary.
+**Ichabod authenticates as his own Kanboard user, not with the global `jsonrpc` token.** The instance exists only for him, so the `ichabod` user is an admin. The user token still beats the global one: comments and moves are attributed to Ichabod, and his token can be revoked on its own. Two things go with admin rights. Zach keeps a separate admin account, so Ichabod can never lock him out. And the plugin installer is off (`PLUGIN_INSTALLER=false`), because Kanboard plugins are PHP, and an admin who can install one can run code on the Synology, which is outside Ichabod's boundary. Zach's own admin account uses Kanboard's built-in two-factor authentication, because the board sits on a public hostname.
 
 ### Where Kanboard runs
 
@@ -180,7 +180,7 @@ Zach chose to run this as `ichabod` rather than as a credential-free user of its
 
 Full destruction first, then a clean build. The repo is already trimmed (2026-09-13); `git show d005f4a:<path>` recovers anything from the OpenClaw era, and nothing on the box is being preserved.
 
-- [ ] **Revoke what the old box held.** The mailbox app password, the `gh` token, the OpenAI key, and the old box's SSH key on the `ich4bod` account. Their only copies are about to be destroyed, so reissue rather than recover.
+- [ ] **Revoke what the old box held.** The mailbox app password, the `gh` token, the OpenAI key, and the old box's SSH key on the `ich4bod` account. The copies in 1Password could be reused, but those values sat for weeks on a box that read untrusted mail, so issue fresh ones for the new box and save each to 1Password as it is created. The OpenAI key is not replaced; the new stack runs on the ChatGPT subscription.
 - [ ] **Replace the instance.** In `tofu/main.tf` set `disable_api_termination = false` and apply, refresh `ami_id` in `terraform.tfvars`, then `tofu -chdir=tofu apply -replace=aws_instance.ichabod`. Set termination protection back to `true` and apply again. The Elastic IP, DNS, alarms and budget are separate resources and survive, and the association moves to the new instance on its own.
 - [ ] **Build the host** from [ICHABOD-GUIDE.md](ICHABOD-GUIDE.md#5-host), then Traefik. Sites under `*.ichabod-crane.net` come back by redeploying from their `ich4bod` repositories.
 
@@ -190,11 +190,12 @@ On the new instance, in rough order:
 
 - [ ] **Prove Pi.** Install `pi` as `ichabod`. Settle the run-mode flags and read one real `--mode json` stream for the actual `usage` field names. Run `scout.md` by hand and measure the preamble off the first usage event.
 - [ ] **Settle the allowance.** Log in to Ichabod's ChatGPT Plus account (`ichabod@ichabod-crane.net`) on the box with Pi's device code login, and pick the models. Prove `usage` works headless. Run the crontab for a day, then a day with dispatched workers, and check whether either hits the 5-hour or weekly limit — a pass is light, **workers on the strongest model are not**, and they are where the usage lives.
-- [ ] **The board.** Kanboard on the Synology at `ichabod-board.zfleeman.com`, with an `ichabod` user and its personal API token as `KANBOARD_TOKEN`, and columns triage, backlog, ready, running, review, blocked, done. `board` written, and `board createTask` works from inside Pi's `bash`. A nightly `board getAllTasks` dump committed into the workspace repo.
+- [ ] **The board.** Kanboard on the Synology at `ichabod-board.zfleeman.com`, with an `ichabod` user and its personal API token as `KANBOARD_TOKEN`, two-factor authentication on Zach's admin account, and columns triage, backlog, ready, running, review, blocked, done. `board` written, and `board createTask` works from inside Pi's `bash`. A nightly `board getAllTasks` dump committed into the workspace repo.
 - [ ] **`make deploy`**, copying `home/` onto the box. Before overwriting, it checks the box against the checksums the last deploy left and stops with a list if anything changed, so a hand edit is pulled into the repo or overwritten on purpose, never lost silently. Zach's files land owned by root and read-only to `ichabod`, which turns an edit into an error that points him at a pull request. `USER.md` and `MEMORY.md` are written only if missing, and `memory/` and `own-skills/` are never touched. The old deploy's trick still works — SSM has no file copy, so ship a base64 tarball inside a run-command, built with `COPYFILE_DISABLE=1 tar --no-xattrs` so macOS metadata files stay out. `git show d005f4a:scripts/deploy-workspace` has it.
 - [ ] **`notify`,** proven by a real email arriving with the right envelope sender.
-- [ ] **Prompts.** Port `scout.md` and `digest.md`. Rewrite `director.md` into `route.md` against `board` — the projection one-liner and the twin-card retirement both disappear, since Kanboard returns small results and tasks can be edited in place. Write `work.md`: take the top `ready` task, do it, comment what happened, move the column. Reasoning goes on the card as a comment, so most of `memory/YYYY-MM-DD/` stops existing.
+- [ ] **Prompts.** `scout.md` and `digest.md` are ported to `board`; check their calls against the real board. Rewrite `director.md` into `route.md` against `board` — the projection one-liner and the twin-card retirement both disappear, since Kanboard returns small results and tasks can be edited in place. Write `work.md`: take the top `ready` task, do it, comment what happened, move the column. Reasoning goes on the card as a comment, so most of `memory/YYYY-MM-DD/` stops existing.
 - [ ] **The membrane.** `intake` and `membrane.md` built to [MEMBRANE.md](MEMBRANE.md), and all four of [its tests](MEMBRANE.md#how-to-test-it) passing — injection, credentials, malformed output, and a normal request. Not three.
+- [ ] **Workspace backup.** `workspace/` is a git repository pushed to a private `ich4bod` repository. [`backup-workspace`](../home/bin/backup-workspace) runs after every pass and refuses to commit if a staged change contains any token or password from the env file or Pi's login.
 - [ ] **`health`,** and a check that it shouts when a pass has not succeeded.
 - [ ] **`home/workspace/AGENTS.md`** finished against the real stack, including the journal rules the board made obsolete.
 - [ ] **End to end.** Install the crontab, email Ichabod a small request, and watch it go from intake to a reply.
@@ -229,3 +230,4 @@ On the new instance, in rough order:
 - Does a Plus allowance cover the crontab and the dispatched workers, or does it need Pro? The passes are light and the workers are not, and only the workers are unbounded.
 - Is one Kanboard project with columns enough, or does the router want swimlanes per kind of work?
 - Does `route`/`work` need to stay split? Answerable only after it has run for a while.
+- The scout pass reads GitHub issues, and `ich4bod/ichabod-crane` is public, so a stranger's issue body reaches an agent that has tools. Should issues from anyone but `zfleeman` go through the membrane the way email does?
