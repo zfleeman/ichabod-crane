@@ -13,7 +13,7 @@ if ! flock -n 9; then
   exit 0
 fi
 
-day="$(date +%F)"; out="/home/ichabod/log/$day/$(date +%H%M)-$name.jsonl"
+day="$(date +%F)"; out="/home/ichabod/log/$day/$(date +%H%M)-$name.jsonl"; err="${out%.jsonl}.stderr"
 mkdir -p "/home/ichabod/log/$day" /home/ichabod/workspace/own-skills
 
 # Pi has no working-directory flag; it reads AGENTS.md from the directory it starts in.
@@ -22,13 +22,16 @@ cd /home/ichabod/workspace
 # --no-skills plus --skill loads exactly Zach's skills and Ichabod's own, without depending on project trust.
 # --no-extensions because an extension can add tools and preamble.
 # 9>&- keeps the lock out of pi, so a process Ichabod leaves running in the background cannot hold it forever.
+# pi's stderr gets a file beside its log, so passes running at once never mix their output in log/run.log.
 # rc is pi's exit code, kept so a failed pass still gets its cost line before this script exits with it.
 rc=0
 timeout 1800 \
   pi --mode json --tools read,write,edit,bash --no-session \
      --no-extensions --no-skills \
      --skill /home/ichabod/workspace/skills --skill /home/ichabod/workspace/own-skills \
-     @"/home/ichabod/prompts/$name.md" > "$out" 9>&- || rc=$?
+     @"/home/ichabod/prompts/$name.md" > "$out" 2> "$err" 9>&- || rc=$?
+# Most runs print nothing there, and an empty file is only clutter.
+[ -s "$err" ] || rm -f "$err"
 
 # Tokens per run, one line per pass. Field names are a guess until someone reads
 # a real event; do not trust this jq as written.

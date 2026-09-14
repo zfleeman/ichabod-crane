@@ -27,7 +27,7 @@ One box, one Unix user, one crontab. The repo's [`home/`](../home) mirrors `/hom
   prompts/
     route.md  work.md  scout.md  digest.md  membrane.md
   workspace/      what Ichabod reads and remembers; see Memory below
-  log/            YYYY-MM-DD/HHMM-<pass>.jsonl, one per run, plus cost.jsonl and usage.jsonl
+  log/            YYYY-MM-DD/HHMM-<pass>.jsonl, one per run, and .stderr beside it if pi printed any; cost.jsonl, usage.jsonl, run.log
   .config/ichabod/env  0600, tokens and passwords, sourced by the wrappers; env.example lists them
 ```
 
