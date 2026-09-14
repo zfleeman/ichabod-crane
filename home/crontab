@@ -1,11 +1,12 @@
 # The shipped schedule. `make cron` installs it as /etc/cron.d/ichabod-schedule; `make deploy` never does.
 # Ichabod's own crontab (`crontab -l` as ichabod) is separate and his to edit.
 # receive-mail stays commented out until the four tests in docs/MEMBRANE.md pass.
+# route and work stay commented out until home/prompts/route.md and work.md exist.
 PATH=/home/ichabod/.local/bin:/usr/local/bin:/usr/bin:/bin
 
 # */5  * * * *   ichabod  /home/ichabod/bin/receive-mail >> /home/ichabod/log/receive-mail.log 2>&1
 */15 * * * *     ichabod  /home/ichabod/bin/usage >> /home/ichabod/log/usage.jsonl
-*/15 * * * *     ichabod  /home/ichabod/bin/run route
-*/15 * * * *     ichabod  /home/ichabod/bin/run work
+# */15 * * * *   ichabod  /home/ichabod/bin/run route
+# */15 * * * *   ichabod  /home/ichabod/bin/run work
 0 4,11,18 * * *  ichabod  /home/ichabod/bin/run scout
 0 7  * * *       ichabod  /home/ichabod/bin/run digest
