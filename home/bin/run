@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # run <name>   run prompts/<name>.md under pi, with a lock and a timeout.
-# Cron runs this. See docs/RUNTIME.md for why each piece is here.
+# Cron runs this. docs/RUNTIME.md has the reasoning behind Pi's flags; the rest is explained inline.
 set -euo pipefail
 name="$1"
 set -a; . /home/ichabod/.config/ichabod/env; set +a
@@ -21,9 +21,11 @@ cd /home/ichabod/workspace
 
 # --no-skills plus --skill loads exactly Zach's skills and Ichabod's own, without depending on project trust.
 # --no-extensions because an extension can add tools and preamble.
+# Re-check --tools after every Pi upgrade: a tool name can keep its name and change what it does.
 # 9>&- keeps the lock out of pi, so a process Ichabod leaves running in the background cannot hold it forever.
 # pi's stderr gets a file beside its log, so passes running at once never mix their output in log/run.log.
 # rc is pi's exit code, kept so a failed pass still gets its cost line before this script exits with it.
+# timeout recovers a hung pass; its log up to the kill survives.
 rc=0
 timeout 1800 \
   pi --mode json --tools read,write,edit,bash --no-session \
