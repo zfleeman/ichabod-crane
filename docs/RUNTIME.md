@@ -128,7 +128,7 @@ Pi has four: interactive, print (`-p`), JSON (`--mode json`), and RPC (`--mode r
 
 **Mail can be what broke, so `health` does not email.** A revoked app password, a Fastmail outage or the send cap would silence the very message saying so. The shouting happens outside the box instead.
 
-Every job touches `.local/state/<job>.ok` when it succeeds: `run` for each pass, and `receive-mail` and `usage` themselves. Every 15 minutes, `health` publishes one `ichabod/Heartbeat` CloudWatch datapoint, dimension `Job`, for each marker touched since its last run. The instance role already allows that through `CloudWatchAgentServerPolicy`.
+Every job touches `.local/state/<job>.ok` when it succeeds: `run` for each pass, and `receive-mail` and `usage` themselves. Once an hour, `health` publishes one `ichabod/Heartbeat` CloudWatch datapoint, dimension `Job`, for each marker touched since its last run. The instance role already allows that through `CloudWatchAgentServerPolicy`.
 
 `tofu/main.tf` has one alarm per job that fires when heartbeats stop, and it sends to the same `ichabod-alerts` SNS topic as the other alarms. Missing data counts as failing, so a dead box, a stopped cron, a broken `health` and a broken `send-mail` all look the same: a job went quiet. How many hours each job may stay quiet lives only in that alarm block, and a new job in `home/crontab` needs a line there too.
 
@@ -212,7 +212,7 @@ What stands between the repository and the state described above. Tick them off 
 - [ ] **Check `scout.md` and `digest.md`** against the real board.
 - [ ] **Prove the membrane.** `receive-mail` and `membrane.md` are written to [MEMBRANE.md](MEMBRANE.md) but have never touched a real mailbox or model. They need a working `send-mail`, and Pi installed as [the guide](ICHABOD-GUIDE.md#5-host) says. The gate, the DMARC check and the output validator are unit tested in `tests/`; the model and the mailbox are not. Confirm Pi reads piped stdin alongside `@membrane.md` in `-p` mode, and that a filed message lands in `Archive`. All four of [its tests](MEMBRANE.md#how-to-test-it) pass before the `receive-mail` line in `home/crontab` is uncommented.
 - [ ] **Clone the fork.** `ich4bod/ichabod-crane` into `src/ichabod-crane`, with `upstream` pointing at `zfleeman/ichabod-crane`, as the `proposing-changes` skill expects.
-- [ ] **Prove `health`.** `make apply` for the heartbeat alarms once the box is rebuilt and `make cron` has run. Each scheduled job's alarm goes to `OK` after its first success, and removing `/etc/cron.d/ichabod-schedule` for two hours puts `ichabod-heartbeat-receive-mail` into `ALARM` with an email from SNS.
+- [ ] **Prove `health`.** `make apply` for the heartbeat alarms once the box is rebuilt and `make cron` has run. Each scheduled job's alarm goes to `OK` after its first success, and removing `/etc/cron.d/ichabod-schedule` for three hours puts `ichabod-heartbeat-receive-mail` into `ALARM` with an email from SNS.
 
 ### Prove it
 

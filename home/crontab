@@ -12,4 +12,5 @@ PATH=/home/ichabod/.local/bin:/usr/local/bin:/usr/bin:/bin
 # 30 */2 * * *   ichabod  /home/ichabod/bin/run work >> /home/ichabod/log/run.log 2>&1
 0 */4 * * *      ichabod  /home/ichabod/bin/run scout >> /home/ichabod/log/run.log 2>&1
 0 7 * * *        ichabod  /home/ichabod/bin/run digest >> /home/ichabod/log/run.log 2>&1
-*/15 * * * *     ichabod  /home/ichabod/bin/health >> /home/ichabod/log/health.log 2>&1
+# health runs at ten to the hour, so the jobs that start on the hour have finished and are counted.
+50 * * * *       ichabod  /home/ichabod/bin/health >> /home/ichabod/log/health.log 2>&1

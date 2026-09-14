@@ -358,8 +358,9 @@ resource "aws_cloudwatch_metric_alarm" "disk_urgent" {
 }
 
 # One alarm per scheduled job in home/crontab. Each job touches a marker on success, and home/bin/health
-# publishes it as a heartbeat every 15 minutes. Mail can be what broke, so these shout through SNS
-# instead: a dead box, a stopped cron, a broken health or broken mail all arrive as missing data.
+# publishes it as a heartbeat once an hour, so an alarm can fire up to an hour after its limit. Mail can be
+# what broke, so these shout through SNS instead: a dead box, a stopped cron, a broken health or broken mail
+# all arrive as missing data.
 # The value is how many hours a job may go without a success, about three missed runs; change it with the
 # crontab. A job still commented out in the crontab sits in ALARM until its line is enabled.
 resource "aws_cloudwatch_metric_alarm" "heartbeat" {
