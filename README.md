@@ -21,8 +21,8 @@ The repository describes the box as it should be, not as it is today. What is le
 ## How it works
 
 ```
-email ──> intake ──> pi, no tools ──> validated card ──> run-pass (pi, cron) ──> work + reply
-          (DMARC)    (reads only)      (Kanboard)         (full host)
+email ──> receive-mail ──> pi, no tools ──> validated card ──> run (pi, cron) ──> work + send-mail
+          (DMARC)          (reads only)      (Kanboard)         (full host)
 ```
 
 | Piece | What it is |
@@ -30,7 +30,7 @@ email ──> intake ──> pi, no tools ──> validated card ──> run-pas
 | Host | One t3a.large, built by OpenTofu in `tofu/`. No inbound SSH; access is AWS SSM only |
 | Passes | Prompt files run by `pi` from cron, each under a lock and a timeout |
 | Board | Kanboard on Zach's Synology, reached by a `board` shell wrapper over JSON-RPC |
-| Membrane | `intake` fetches mail, a tool-less `pi` describes it, and the script writes the card itself |
+| Membrane | `receive-mail` fetches mail, a tool-less `pi` describes it, and the script writes the card itself |
 | Web | Traefik terminates TLS for anything Ichabod deploys, on a wildcard DNS record |
 
 **The trust boundary is the whole design.** An email is untrusted text, even from a trusted sender, because Zach forwards things he did not write. It gets read by a process that can do nothing but print four fields, and the agent with real authority reads the card, never the message. [docs/MEMBRANE.md](docs/MEMBRANE.md) explains this from first principles, including why sanitising the email is not an option.
@@ -57,7 +57,7 @@ Almost every bug in this project's history was the same bug wearing a different 
 
 Three failure shapes worth designing against, because they are worse than an error:
 
-- **Silent skip.** A credential that fails to resolve and makes the intake skip the mailbox rather than error looks exactly like nobody having written. Fail loudly, and say which command fixes it.
+- **Silent skip.** A credential that fails to resolve and makes `receive-mail` skip the mailbox rather than error looks exactly like nobody having written. Fail loudly, and say which command fixes it.
 - **Confident fabrication.** A reader told to record a `Message-ID` it was never given invented a plausible one, which sat on a card looking like evidence. An absent field is safe; a fabricated one is not.
 - **Half-applied guard.** A hook that deleted dangerous fields from a tool call did nothing, because the host merged the model's original arguments back over it — and logged that the hook ran. Prefer designs where the dangerous thing cannot be expressed at all.
 
@@ -70,7 +70,7 @@ docs/        MEMBRANE.md is the trust boundary and the one to read first
 tofu/        The machine, DNS, alarms. Zach applies it; Ichabod never does
 scripts/     deploy and install-home, behind make deploy
 home/        Mirrors /home/ichabod on the box
-  bin/       Commands: run-pass, board, intake, usage, backup-workspace, set-secret
+  bin/       Commands: run, board, receive-mail, send-mail, usage, set-secret
   prompts/   What cron runs, one file per pass
   workspace/ Identity and operating rules, plus skills/ for procedures he only sometimes needs. His own skills live in own-skills/ on the box, not here
   templates/ The starting compose file for an application

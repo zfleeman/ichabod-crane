@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# intake   fetch mail -> gate -> a tool-less pi describes it -> validate -> board createTask.
+# receive-mail   fetch mail -> gate -> a tool-less pi describes it -> validate -> board createTask.
 # The one safety-critical path on the box; docs/MEMBRANE.md is its specification. Cron runs this.
 #
 # Every flag on the reader line is load-bearing (MEMBRANE.md, "The flags, one at a time"):
@@ -35,8 +35,9 @@ MAX_AGE_SECONDS = 48 * 3600
 MAX_BODY_CHARS = 100_000
 REJECTED_FOLDER = "Rejected"
 QUARANTINE_FOLDER = "Quarantine"
-STATE_FILE = f"{HOME}/.local/state/intake-seen.jsonl"
-LOCK_FILE = f"{HOME}/.local/state/intake.lock"
+ARCHIVE_FOLDER = "Archive"
+STATE_FILE = f"{HOME}/.local/state/receive-mail-seen.jsonl"
+LOCK_FILE = f"{HOME}/.local/state/receive-mail.lock"
 
 READER = [
     "/usr/bin/env", "-i", "HOME=/tmp", "PATH=/usr/bin",
@@ -62,8 +63,8 @@ def log(uid, outcome, reason=""):
 
 
 def tell_zach(subject, body):
-    # notify is the only way mail leaves the box. If it fails, intake fails, so health sees it.
-    subprocess.run([f"{HOME}/bin/notify", subject], input=body.encode(), check=True, timeout=120)
+    # send-mail is the only way mail leaves the box. If it fails, receive-mail fails, so health sees it.
+    subprocess.run([f"{HOME}/bin/send-mail", subject], input=body.encode(), check=True, timeout=120)
 
 
 def load_env():
@@ -200,7 +201,7 @@ def file_card(card, address, message_id, date_header, received_at):
     # Column and tags are fixed here. No column_id means the first column, which is triage.
     received = datetime.fromtimestamp(received_at, timezone.utc).isoformat(timespec="seconds")
     description = "\n".join([
-        f"**From:** {address} (allowlisted, DMARC verified by intake)",
+        f"**From:** {address} (allowlisted, DMARC verified by receive-mail)",
         f"**Message-ID:** {message_id or 'not given'}",
         f"**Date header:** {date_header or 'not given'}",
         f"**Received:** {received}",
@@ -226,7 +227,7 @@ def file_card(card, address, message_id, date_header, received_at):
 
 
 def header_text(msg, name, limit=200):
-    # Headers intake writes onto the card itself, flattened to one bounded line.
+    # Headers receive-mail writes onto the card itself, flattened to one bounded line.
     value = " ".join(str(msg.get(name, "")).split())
     return value[:limit]
 
@@ -261,7 +262,7 @@ def process(imap, uid, uidvalidity, seen_uids, seen_message_ids):
         record(uidvalidity, int(uid), message_id, "quarantined")
         log(uid, "quarantined", str(q))
         tell_zach(
-            "intake quarantined a message",
+            "receive-mail quarantined a message",
             f"Message-ID: {message_id or 'not given'}\nReason: {q}\n\n"
             f"It is in the {QUARANTINE_FOLDER} folder. Read it yourself; no card was made.\n",
         )
@@ -270,18 +271,19 @@ def process(imap, uid, uidvalidity, seen_uids, seen_message_ids):
     # Card first, then the record: a crash between them makes a duplicate card, never a lost request.
     task_id = file_card(card, address, message_id, header_text(msg, "Date"), received_at)
     record(uidvalidity, int(uid), message_id, "filed")
-    imap.uid("STORE", uid, "+FLAGS", "(\\Seen)")
+    # The card is now the record of the request, so the message leaves the inbox and nothing else needs IMAP.
+    imap.uid("MOVE", uid, ARCHIVE_FOLDER)
     log(uid, "filed", f"task={task_id}{' suspicious' if card['suspicious'] else ''}")
     return True
 
 
 def main():
-    # One intake at a time, so a slow reader call cannot overlap the next run and take the same message.
+    # One receive-mail at a time, so a slow reader call cannot overlap the next run and take the same message.
     lock = open(LOCK_FILE, "w")
     try:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
-        log("-", "skipped", "previous intake still running")
+        log("-", "skipped", "previous receive-mail still running")
         return 0
 
     # Fail closed and loud: a mailbox that cannot be opened must never look like a quiet day.
@@ -295,14 +297,14 @@ def main():
         # Only the exception type: an IMAP error can echo what was sent.
         log("-", "error", f"mailbox did not open: {type(e).__name__}")
         tell_zach(
-            "intake cannot open the mailbox",
-            f"intake could not log in to {IMAP_USER} ({type(e).__name__}). No mail is being read.\n"
+            "receive-mail cannot open the mailbox",
+            f"receive-mail could not log in to {IMAP_USER} ({type(e).__name__}). No mail is being read.\n"
             "If the app password is wrong or revoked, set a new one with: make secret NAME=IMAP_PASSWORD\n",
         )
         return 1
 
     try:
-        for folder in (REJECTED_FOLDER, QUARANTINE_FOLDER):
+        for folder in (REJECTED_FOLDER, QUARANTINE_FOLDER, ARCHIVE_FOLDER):
             imap.create(folder)  # NO when it already exists, which is fine
         imap.select("INBOX")
         uidvalidity = int(imap.response("UIDVALIDITY")[1][0])

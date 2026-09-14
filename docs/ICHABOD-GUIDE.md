@@ -51,7 +51,7 @@ Account passwords and recovery codes never go on the instance; only the tokens l
 
 **Domain.** Route 53 is authoritative for `ichabod-crane.net`, web and mail records both. An apex and a wildcard A record point at the Elastic IP; the wildcard does not answer for the apex, so both exist. The board's `ichabod-board.zfleeman.com` record is in `tofu/` too, and points at Zach's Synology rather than the box.
 
-**Email.** A paid mailbox with a custom domain, real IMAP, real SMTP and app passwords. Fastmail Standard is the floor there, since Basic has no third-party IMAP. App passwords rather than OAuth: scoped to mail, revocable on their own, and they do not expire mid-week. There are two, one for `intake` to read and one for `notify` to send, so sending can be revoked without breaking intake. DKIM is the provider's job — mail leaves through its SMTP and is signed on the way out, so nothing on the box holds a signing key. Do not self-host mail to save a few dollars; deliverability is a separate project.
+**Email.** A paid mailbox with a custom domain, real IMAP, real SMTP and app passwords. Fastmail Standard is the floor there, since Basic has no third-party IMAP. App passwords rather than OAuth: scoped to mail, revocable on their own, and they do not expire mid-week. There are two, one for `receive-mail` and one for `send-mail`, so sending can be revoked without breaking receive-mail. DKIM is the provider's job — mail leaves through its SMTP and is signed on the way out, so nothing on the box holds a signing key. Do not self-host mail to save a few dollars; deliverability is a separate project.
 
 **Secrets.** Not AWS Secrets Manager. A root-equivalent agent with a role that can fetch a secret can fetch it anyway, so it would improve rotation, not isolation. Secrets live in one file, `/home/ichabod/.config/ichabod/env`, mode 0600, and [`env.example`](../home/.config/ichabod/env.example) lists every name it needs.
 
@@ -219,9 +219,10 @@ The acceptance test for the whole system is one sentence: email Ichabod a small 
 ## Backups
 
 1. **GitHub** — source for every valuable project.
-2. **The workspace** — `backup-workspace` pushes `workspace/` to a private `ich4bod` repository after every pass, including a nightly dump of the board. Kanboard's own data lives on the Synology, off the box.
-3. **Application-native** — dumps or volume archives, per the app's README.
-4. **EBS snapshots** — whole-machine recovery, on a lifecycle policy owned by Zach's AWS account and never touched from the box.
+2. **Application-native** — dumps or volume archives, per the app's README.
+3. **EBS snapshots** — whole-machine recovery, on a lifecycle policy owned by Zach's AWS account and never touched from the box.
+
+The workspace (`MEMORY.md`, `memory/`, `own-skills/`) has no backup of its own and lives only on the box and its snapshots. Kanboard's data lives on the Synology, off the box.
 
 A backup stored only on the failed volume is not a recovery plan, and an untested restore is a hypothesis. Restore one into a disposable instance at least once.
 

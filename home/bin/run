@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# run-pass <name>   run prompts/<name>.md under pi, with a lock and a timeout.
+# run <name>   run prompts/<name>.md under pi, with a lock and a timeout.
 # Cron runs this. See docs/RUNTIME.md for why each piece is here.
 set -euo pipefail
 name="$1"
@@ -12,6 +12,7 @@ cd /home/ichabod/workspace
 
 # --no-skills plus --skill loads exactly Zach's skills and Ichabod's own, without depending on project trust.
 # --no-extensions because an extension can add tools and preamble.
+# rc is pi's exit code, kept so a failed pass still gets its cost line before this script exits with it.
 rc=0
 flock -n "/home/ichabod/.local/state/$name.lock" \
   timeout 1800 \
@@ -26,6 +27,4 @@ jq -s '[.[] | .usage // empty] | {pass: "'"$name"'",
        in: (map(.input_tokens) | add), out: (map(.output_tokens) | add)}' \
   "$out" >> /home/ichabod/log/cost.jsonl
 
-# Back up workspace/ even after a failed pass. A refused backup fails the run so health sees it.
-/home/ichabod/bin/backup-workspace || rc=$?
 exit $rc

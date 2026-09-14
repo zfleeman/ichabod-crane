@@ -2,7 +2,7 @@
 
 How Ichabod thinks and acts on the box: Pi, cron, the board, and the scripts between them. The machine underneath is [ICHABOD-GUIDE.md](ICHABOD-GUIDE.md), and the mail boundary is [MEMBRANE.md](MEMBRANE.md).
 
-The goal is a box you can hold in your head: a handful of shell scripts, a crontab, prompt files, and `pi`. No daemon, no plugins, no dashboard, nothing to keep alive. The work still in front of that goal is [Open actions](#open-actions) at the bottom.
+The goal is a box small enough that one person can understand all of it at once: a handful of shell scripts, a crontab, prompt files, and `pi`. No daemon, no plugins, no dashboard, nothing to keep alive. The work still in front of that goal is [Open actions](#open-actions) at the bottom.
 
 ## Why Pi and cron
 
@@ -17,16 +17,16 @@ One box, one Unix user, one crontab. The repo's [`home/`](../home) mirrors `/hom
 ```
 /home/ichabod/
   bin/
-    run-pass      run one prompt file under pi, with a lock and a timeout
+    run           run one prompt file under pi, with a lock and a timeout
     board         one curl per Kanboard JSON-RPC method, the agent's only board access
-    intake        fetch mail -> membrane -> card
-    notify        send one email
+    receive-mail  fetch mail -> membrane -> card -> archive
+    send-mail     send one email to Zach
     health        touch on success; shout when stale
     usage         the ChatGPT Plus 5-hour and weekly usage, as one JSON line
-    backup-workspace, set-secret
+    set-secret    prompt for one secret and write it into the env file
   prompts/
     route.md  work.md  scout.md  digest.md  membrane.md
-  workspace/      AGENTS.md, IDENTITY.md, SOUL.md, USER.md, MEMORY.md, memory/, skills/, own-skills/
+  workspace/      what Ichabod reads and remembers; see Memory below
   log/            YYYY-MM-DD/HHMM-<pass>.jsonl, one per run, plus cost.jsonl and usage.jsonl
   .config/ichabod/env  0600, tokens and passwords, sourced by the wrappers; env.example lists them
 ```
@@ -48,20 +48,41 @@ The schedule is [`home/crontab`](../home/crontab), installed as `/etc/cron.d/ich
 
 **Reasoning goes on the card as a comment.** The board is the queue and the record, so the journal in `memory/` only holds what does not belong to a card.
 
-**`route` and `work` are separate on purpose, for now.** One "read the board, do the next thing" loop is probably the right end state, but it is a simplification to make once the two passes have run long enough to show whether the split earns its keep.
+**`route` and `work` are separate passes because they run on different models.** Pi takes one `--model` per run, so a single "read the board, do the next thing" loop would put routing and building on the same model. [Models and usage](#models-and-usage) says which job gets which. Fold them into one loop only if one model turns out to be right for both.
 
-## run-pass
+## Memory
 
-[`run-pass`](../home/bin/run-pass) is the whole harness.
+Every run starts with an empty context, and nothing carries over from the last run except what is written down. Pi loads one file by itself; everything else the agent reads on purpose, with `read` or `grep`, when the work calls for it. That keeps the preamble small, and it means the file layout below is the memory design.
+
+| File | Owner | How it reaches the model | What it holds |
+|---|---|---|---|
+| `workspace/AGENTS.md` | Zach | Loaded by Pi on every run | Mission, authority, operating rules, and the rules for the rest of this table |
+| `SOUL.md`, `IDENTITY.md` | Zach | Read when needed | Voice, honesty rules, name and signature |
+| `USER.md` | Ichabod | Read when needed | What he has learned about Zach, one dated directive per entry |
+| `MEMORY.md` | Ichabod | Read when needed | Durable conclusions: decisions and why, lessons, facts about the estate. Kept between 4,000 and 5,500 characters |
+| `memory/YYYY-MM-DD.md` | Ichabod | Read when needed | That day's contents page, one line per journal entry |
+| `memory/YYYY-MM-DD/NN-HHMM-<name>.md` | Ichabod | Opened one at a time, from the contents page | The journal: what was tried, what broke, the command that finally worked |
+| `skills/`, `own-skills/` | Zach, Ichabod | Name and description every run; the full `SKILL.md` when a task matches | Procedures needed only sometimes |
+| The board | Both | `board` calls | Everything about one card: acceptance criteria, reasoning as comments, its column |
+
+A fact moves up that table as it proves it will last. It starts as a comment on a card or a journal entry, and when it will still matter in a month it becomes one line in `MEMORY.md`, with the detail left behind. `AGENTS.md` holds the exact rules, since it is the one file the agent is guaranteed to see.
+
+Pi looks for `AGENTS.md` in `~/.pi/agent/`, in every parent of the directory it starts in, and in that directory. Only `workspace/AGENTS.md` exists, so only it loads. Creating `/home/ichabod/AGENTS.md` would silently add to every run's preamble.
+
+`log/` is not memory. The passes read `cost.jsonl` and `usage.jsonl` from it, and the per-run transcripts are for Zach.
+
+## run
+
+[`run`](../home/bin/run) is the whole harness.
 
 - **`flock -n`** is the concurrency rule: if the previous run of that pass is still going, this one exits rather than stacking.
 - **`timeout`** is stall recovery. A pass that hangs is killed, and its log up to the kill survives.
-- **`rc` is captured** rather than allowed to abort under `set -e`, because a failed pass still has a log worth summarising and a workspace worth backing up.
+- **`rc` is Pi's exit code**, where 0 means success. `run` saves it instead of letting `set -e` stop the script on a failure, so a failed pass still gets its line in `cost.jsonl`, and then exits with that code so cron and `health` see the failure.
 - **It `cd`s into `workspace/`**, because Pi has no working-directory flag and finds `AGENTS.md` in the directory it starts in.
 
 Skills load with `--no-skills` and two `--skill` folders: `workspace/skills/`, which ships from this repo, and `workspace/own-skills/`, which Ichabod writes himself. Nothing global loads. Pi only puts each skill's name and description in the system prompt, and the agent reads the full `SKILL.md` when a task matches; once read, a skill stays in context for the rest of the run. Project-local skill folders (`.pi/skills`, `.agents/skills`) are ignored in `--mode json` unless the project is trusted, which is why the paths are explicit.
 
-After every pass, [`backup-workspace`](../home/bin/backup-workspace) commits `workspace/` and pushes it to a private `ich4bod` repository. It refuses to commit if a staged change contains any token or password from the env file or Pi's login, and a refusal fails the run so `health` sees it.
+**Passes run with `--no-session`.** A Pi session is a file in `~/.pi/agent/sessions/` holding one conversation, which Pi can reopen with `--resume` to keep talking, branch with `/tree`, or render as a web page with `--export`. The `--mode json` log already records every message and tool call of a run, so nothing is lost for reading back what happened. What is lost is reopening a finished pass to ask it why it did something. `--session-dir /home/ichabod/log/sessions` in place of `--no-session` would get that back, at the cost of a second copy of every run on disk.
 
 ### Run modes
 
@@ -92,7 +113,7 @@ The limits show on chatgpt.com, which nothing on the box can read. Two numbers s
 
 [`usage`](../home/bin/usage) asks the endpoint that the Pi extensions [`pi-codex-rate-limits`](https://github.com/scnewma/pi-codex-rate-limits) and [`pi-codex-limit`](https://pi.dev/packages/pi-codex-limit) call, with the same login Pi uses. The endpoint is undocumented and can change without notice, so `--fail` makes a change an error `health` can see rather than a quiet gap in the log. The saved token lasts about ten days and Pi refreshes it when it runs, so `usage` only fails on expiry if Pi has not run in that long.
 
-The digest reports from both files, and `route` can run `usage` before dispatching self-directed work and hold off above a weekly threshold Zach picks.
+The digest reports from both files. `route` runs `usage` before moving a self-directed (`wild-work`) card to `ready`, and leaves it in `backlog` while the weekly figure is at or above 70%, so Zach's requests keep the last part of the week.
 
 ## The board
 
@@ -102,7 +123,7 @@ MCP tool schemas are exactly the preamble tax Pi was chosen to remove: a schema 
 
 **Ichabod authenticates as his own Kanboard user**, with that user's personal API token as `KANBOARD_TOKEN`, not the global `jsonrpc` token. Comments and moves are attributed to him, and his token can be revoked on its own. The instance exists only for him, so the `ichabod` user is an admin, and two things go with that:
 
-- Zach keeps a separate admin account with Kanboard's two-factor authentication, because the board sits on a public hostname and Ichabod must never be able to lock him out.
+- Zach logs in with his own Kanboard admin account, never Ichabod's. That account has two-factor authentication turned on (a one-time code from an authenticator app at login), because it is an admin login on a public hostname. If Ichabod ever breaks or deletes it, Zach resets it from the Kanboard container on the Synology, which Ichabod cannot reach.
 - The plugin installer is off (`PLUGIN_INSTALLER=false`). Kanboard plugins are PHP, and an admin who can install one can run code on the Synology, which is outside Ichabod's boundary.
 
 **Why the Synology and not the box.** The box reaches the world outbound only, so it needs a public HTTPS endpoint wherever the board sits, and the Synology's reverse proxy already provides one. Hosting it there means Ichabod's Docker authority, including `system prune` and volume removal, never reaches the board, and the board does not die with the box on a rebuild. The accepted risk is home network and power uptime.
@@ -111,22 +132,23 @@ MCP tool schemas are exactly the preamble tax Pi was chosen to remove: a schema 
 
 ## Mail
 
-**In:** `intake` fetches one message, gates it, hands the body to a Pi with no tools, validates the four fields it prints, and writes the card itself. That path is the only safety-critical one on the box, and [MEMBRANE.md](MEMBRANE.md) is its specification.
+**In:** `receive-mail` fetches one message, gates it, hands the body to a Pi with no tools, validates the four fields it prints, writes the card itself, and moves the message to `Archive`. That path is the only safety-critical one on the box, and [MEMBRANE.md](MEMBRANE.md) is its specification.
 
-**Out:** `notify` is a short Python `smtplib` script with these rules, enforced in code:
+**Out:** `send-mail [--in-reply-to <message-id>] <subject>`, with the body on stdin, is a short Python `smtplib` script with these rules, enforced in code:
 
 - Zach is the only recipient.
 - Envelope sender and `From` are both `ichabod@ichabod-crane.net`.
+- `--in-reply-to` sets `In-Reply-To` and `References`, so a reply threads under Zach's message.
 - Retry `4xx`, stop on `5xx`.
 - A per-hour send cap, as a backstop against a retry loop.
 - The SMTP password is redacted out of any error text.
 
-Mailbox housekeeping, such as search and archive, is more subcommands on the same scripts.
+**There is no search or archive command, on purpose.** Replying needs the original `Message-ID`, and `receive-mail` writes it onto every card. Archiving keeps the inbox to unread mail, and `receive-mail` does that the moment the card exists. A search command would be a way for an agent with tools to read message bodies, which is exactly what the membrane exists to prevent. Rejected and quarantined mail waits in those folders for Zach to read in Fastmail.
 
 ## Trade-offs this design accepts
 
 - **No model fallback.** A provider outage fails the pass, and the next scheduled run tries again.
-- **No dashboard for sessions.** Kanboard shows the board; tool calls and agent state are `jq` over `log/`.
+- **No dashboard for sessions.** Kanboard shows the board; tool calls and agent state are `jq` over `log/`. If that gets old, swap `--no-session` for `--session-dir` (see [run](#run)) and `pi --export <session-file> run.html` turns any run into a web page to open on the laptop: a dashboard with nothing left running.
 - **Shell and Python instead of typed plugins.** Easier to read, and easier to get subtly wrong.
 - **A new agent is a prompt file and a cron line.** Smaller, and less interesting, than a multi-agent framework.
 - **Secrets are not redacted from the model.** The env file is mode 0600, and a shell-sourced variable is one `env` call away from a transcript. `ichabod` is root-equivalent regardless, and the membrane, the process that is not trusted, inherits none of them.
@@ -146,20 +168,19 @@ What stands between the repository and the state described above. Tick them off 
 ### Build the runtime
 
 - [ ] **Prove Pi.** Install `pi` as `ichabod`, run `scout.md` by hand, and measure the real preamble off the first usage event. Confirm whether `-p` is shorthand for `--mode print`, so no script combines two modes that silently override each other.
-- [ ] **Fix `run-pass`'s cost line.** Its `jq` guesses at the usage field names; read a real `--mode json` stream and correct it.
+- [ ] **Fix `run`'s cost line.** Its `jq` guesses at the usage field names; read a real `--mode json` stream and correct it.
 - [ ] **Make `timeout` kill Pi's children.** `timeout` signals its direct child, so a `bash` tool call can outlive it and keep spending. Check it, and add `--kill-after` or a process-group kill if needed.
 - [ ] **Tell a skipped run from a failed one.** A run skipped by the lock exits 1 and leaves an empty log. `flock -n -E 75` with a clean early exit on 75 fixes that.
-- [ ] **Settle the allowance.** Log in to Ichabod's ChatGPT Plus account with Pi's device code login, pick the models for each job, and prove `usage` works headless. Run the crontab for a day, then a day with workers, and check whether either hits the 5-hour or weekly limit. Workers on the strongest model are where the usage lives.
-- [ ] **Stand up the board.** Kanboard on the Synology with the `ichabod` user and token, two-factor on Zach's account, the plugin installer off, and columns triage, backlog, ready, running, review, blocked, done. `board createTask` works from inside Pi's `bash`. A nightly `board getAllTasks` dump committed into the workspace repo as a diffable off-box mirror.
-- [ ] **Write `notify`,** and prove it with a real email arriving with the right envelope sender.
-- [ ] **Write `route.md` and delete `director.md`.** `director.md` is still written against the old workboard CLI. Carry over what it learned: read `backlog` before concluding there is nothing to do, dispatch one build-heavy card at a time, treat a `running` card that has not moved in an hour as stuck, close `review` only on work actually watched, and check `MEMORY.md` against its band. Drop the projection one-liner and the twin-card workaround, since Kanboard returns small results and tasks can be edited in place.
+- [ ] **Settle the allowance.** Log in to Ichabod's ChatGPT Plus account with Pi's device code login, pick the models for each job and give `run` a `--model` per pass, and prove `usage` works headless. Run the crontab for a day, then a day with workers, and check whether either hits the 5-hour or weekly limit. Workers on the strongest model are where the usage lives.
+- [ ] **Stand up the board.** Kanboard on the Synology with the `ichabod` user and token, two-factor on Zach's own login, the plugin installer off, and columns triage, backlog, ready, running, review, blocked, done. `board createTask` works from inside Pi's `bash`.
+- [ ] **Write `send-mail`,** and prove it with a real email arriving with the right envelope sender, and a `--in-reply-to` reply threading under the original in Gmail.
+- [ ] **Write `route.md` and delete `director.md`.** `director.md` is still written against the old workboard CLI. Carry over what it learned: read `backlog` before concluding there is nothing to do, dispatch one build-heavy card at a time, treat a `running` card that has not moved in an hour as stuck, close `review` only on work actually watched, and check `MEMORY.md` against its band. Add the `usage` check from [Models and usage](#models-and-usage) before a `wild-work` card moves to `ready`, and have `scout.md` skip its proposal at the same threshold. Drop the projection one-liner and the twin-card workaround, since Kanboard returns small results and tasks can be edited in place.
 - [ ] **Write `work.md`.**
 - [ ] **Check `scout.md` and `digest.md`** against the real board.
-- [ ] **Prove the membrane.** `intake` and `membrane.md` are written to [MEMBRANE.md](MEMBRANE.md) but have never touched a real mailbox or model. They need `notify`, which `intake` calls as `notify <subject>` with the body on stdin, and `pi` resolvable on `PATH=/usr/bin`. Confirm Pi reads piped stdin alongside `@membrane.md` in `-p` mode. All four of [its tests](MEMBRANE.md#how-to-test-it) pass before the intake line in `home/crontab` is uncommented.
-- [ ] **Make the workspace backup real.** Create the private `ich4bod` repository and initialise `workspace/` against it.
+- [ ] **Prove the membrane.** `receive-mail` and `membrane.md` are written to [MEMBRANE.md](MEMBRANE.md) but have never touched a real mailbox or model. They need `send-mail`, which `receive-mail` calls as `send-mail <subject>` with the body on stdin, and `pi` resolvable on `PATH=/usr/bin`. Confirm Pi reads piped stdin alongside `@membrane.md` in `-p` mode, and that a filed message lands in `Archive`. All four of [its tests](MEMBRANE.md#how-to-test-it) pass before the `receive-mail` line in `home/crontab` is uncommented.
 - [ ] **Clone the fork.** `ich4bod/ichabod-crane` into `src/ichabod-crane`, with `upstream` pointing at `zfleeman/ichabod-crane`, as the `proposing-changes` skill expects.
 - [ ] **Write `health`,** and prove it shouts when a pass has not succeeded.
-- [ ] **Finish `AGENTS.md` against the real stack.** Its memory section still describes a per-pass journal the board makes mostly unnecessary.
+- [ ] **Finish `AGENTS.md` against the real stack.** Its memory section still names `director` journal entries and a journal entry per pass; bring it in line with [Memory](#memory), where reasoning about a card goes on the card.
 
 ### Prove it
 
@@ -172,7 +193,5 @@ What stands between the repository and the state described above. Tick them off 
 
 - Which OpenAI model does each job, and does Plus cover the crontab and the workers or does it need Pro?
 - Is one Kanboard project with columns enough, or does `route` want swimlanes per kind of work?
-- Should `route` and `work` fold into one loop? Answerable only after they have run for a while.
 - `scout` reads GitHub issues, and `ichabod-crane` is public, so a stranger's issue body reaches an agent with tools. Should issues from anyone but `zfleeman` go through the membrane the way email does?
 - Is `t3a.large` still the right size? It was chosen when the box also ran a Node gateway and a sandbox image.
-- What weekly usage threshold should hold off self-directed work?
