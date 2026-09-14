@@ -197,7 +197,7 @@ What stands between the repository and the state described above. Tick them off 
 - [ ] **Revoke what the previous box held.** The mailbox app password, the `gh` token, the OpenAI API key, and the old SSH key on the `ich4bod` account. Those values sat on a box that read untrusted mail, so issue fresh ones rather than reusing them. The OpenAI key is not replaced; the subscription covers models.
 - [ ] **Replace the instance.** In `tofu/main.tf` set `disable_api_termination = false` and apply, refresh `ami_id` in `terraform.tfvars`, then `tofu -chdir=tofu apply -replace=aws_instance.ichabod`. Set termination protection back to `true` and apply again. The Elastic IP, DNS, alarms and budget are separate resources and survive.
 - [ ] **Build the host** from [ICHABOD-GUIDE.md](ICHABOD-GUIDE.md#5-host).
-- [ ] **Deploy.** `make deploy`, then again to confirm the second run changes nothing. Set each secret with `make secret`. Then start Traefik from [its compose file](ICHABOD-GUIDE.md#traefik-once), and after it, bring back the sites under `*.ichabod-crane.net` by redeploying them from their `ich4bod` repositories.
+- [ ] **Deploy.** `make deploy`, then again to confirm the second run changes nothing. Set each secret with `make secret`. Then start Traefik from [its compose file](ICHABOD-GUIDE.md#traefik-once).
 
 ### Build the runtime
 
@@ -216,7 +216,7 @@ What stands between the repository and the state described above. Tick them off 
 
 ### Prove it
 
-- [ ] **End to end.** `make cron`, then pass [the acceptance test](ICHABOD-GUIDE.md#touchpoints) with a small website idea. Scheduled work survives a host reboot.
+- [ ] **End to end.** `make cron`, then pass [the acceptance test](ICHABOD-GUIDE.md#touchpoints) by emailing Ichabod to bring back every app on his `ich4bod` account that was running before the rebuild, with a link to each one he loaded. The sites stay down until this passes. Scheduled work survives a host reboot.
 - [ ] **Rehearse recovery.** Restore one application backup into a disposable instance, and have Zach run every kill switch in [the guide](ICHABOD-GUIDE.md#kill-switches) in order rather than trusting that it is written down.
 - [ ] **EBS snapshots.** Add a lifecycle policy to `tofu/`; the guide relies on one and none exists yet.
 - [ ] **Session Manager logging.** Decide whether to log sessions to S3 or CloudWatch Logs so administrative access is auditable, and add it to `tofu/` if so.
