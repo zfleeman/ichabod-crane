@@ -100,7 +100,17 @@ Everything below runs from `make shell`, which lands as `ssm-user` with password
 
    `docker run --rm hello-world` as `ichabod` is not a formality; it confirms the intended root-equivalent authority. `ssm-user` reaches Docker only through sudo and should stay that way.
 8. Install the GitHub CLI from [GitHub's apt repository](https://github.com/cli/cli/blob/trunk/docs/install_linux.md); Ubuntu's own package lags well behind.
-9. As `ichabod`, generate an SSH key with `ssh-keygen -t ed25519` and add the public half to `ich4bod` as an account key. Set `git config --global user.name` and `user.email` to Ichabod's.
+9. Install Node and Pi system-wide, as root. Node comes from [NodeSource's apt repository](https://github.com/nodesource/distributions), because Ubuntu's own package is older than Pi supports:
+
+   ```
+   curl -fsSL https://deb.nodesource.com/setup_24.x | sudo bash -
+   sudo apt-get install -y --allow-change-held-packages nodejs=24.21.0-1nodesource1
+   sudo apt-mark hold nodejs
+   sudo npm install -g @earendil-works/pi-coding-agent@0.85.1
+   ```
+
+   This puts `node` and `pi` in `/usr/bin`, owned by root. `receive-mail` starts the membrane with `PATH=/usr/bin` and nothing else, so a `pi` installed anywhere else makes every email fail. Root ownership also means Ichabod cannot swap the `pi` the membrane runs. Check all three: `env -i PATH=/usr/bin pi --version` prints a version, `sudo -u ichabod bash -lc 'command -v pi'` prints `/usr/bin/pi`, and `ls -l /usr/bin/pi` shows root. To upgrade, change both pins here and rerun these lines.
+10. As `ichabod`, generate an SSH key with `ssh-keygen -t ed25519` and add the public half to `ich4bod` as an account key. Set `git config --global user.name` and `user.email` to Ichabod's.
 
 Then, from the laptop, `make deploy` and `make secret` for each name in [`env.example`](../home/.config/ichabod/env.example). [RUNTIME.md](RUNTIME.md) covers everything after that.
 
