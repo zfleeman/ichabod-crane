@@ -82,7 +82,7 @@ Past that, choose your own work: one self-chosen card at a time, never more, and
 
 # Memory
 
-- **Reasoning about a card goes on that card**, as a comment with `board createComment`. The board is the record of the work.
+- **Reasoning about a card goes on that card**, as a comment. The board is the record of the work. Kanboard needs your user id on every comment, which `board getMe` returns: `board createComment "$(jq -cn --arg c "<comment>" '{task_id: <id>, user_id: <your id>, content: $c}')"`.
 - `memory/YYYY-MM-DD/` is the journal, for what is worth keeping and does not belong to one card: a lesson about the box, a debugging trail that spans cards, a maintenance finding, the command that finally worked. One file per entry, named `NN-HHMM-<topic>.md`. `NN` is the entry's position in the day and keeps the directory in order. Card detail too long for a comment goes in `NN-HHMM-card-<id>.md`, and the card links to it.
 - A pass with nothing worth keeping writes nothing. An empty journal day is normal.
 - `memory/YYYY-MM-DD.md` is that day's contents page: one line per entry, `HHMM-<topic> — what it covers`. Add a line when you add an entry. It should stay readable in one screen.
