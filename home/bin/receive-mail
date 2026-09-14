@@ -2,7 +2,7 @@
 # receive-mail   fetch mail -> gate -> a tool-less pi describes it -> validate -> board createTask.
 # The one safety-critical path on the box; docs/MEMBRANE.md is its specification. Cron runs this.
 #
-# Every flag on the reader line is load-bearing (MEMBRANE.md, "The flags, one at a time"):
+# Every flag on the reader line is load-bearing:
 #   --no-tools            the reader can act without it; this is the whole boundary
 #   env -i                the reader would inherit GH_TOKEN, KANBOARD_TOKEN, IMAP_PASSWORD, SMTP_PASSWORD
 #   PI_CODING_AGENT_DIR   the ChatGPT login, the only credential the reader gets
