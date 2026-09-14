@@ -40,6 +40,12 @@ Do not close issues, comment on them, or edit them. This pass reads GitHub and w
 
 Skip this half entirely if the issue sweep created any task, or if any of Zach's requested tasks are already waiting in `triage`, `ready`, or `running`. His work comes first, and a proposal that competes with it is noise.
 
+Also skip it if you already proposed something today. You run several times a day, so check rather than remember; any number above zero means skip:
+
+```
+board searchTasks '{"project_id":1,"query":"tag:wild-work created:today"}' | jq length
+```
+
 Otherwise, propose at most one task, tagged `wild-work`, in `backlog` (find its `column_id` with `board getColumns '{"project_id":1}'`), with all five of these in its description:
 
 - **Hypothesis** — what you think is true, stated so it can turn out false.
