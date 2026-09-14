@@ -180,7 +180,7 @@ MCP tool schemas are exactly the preamble tax Pi was chosen to remove: a schema 
 
 ## Open actions
 
-What stands between the repository and the state described above. Tick them off by deleting them.
+What stands between the repository and the state described above. Tick them off by deleting them. Decisions that need Zach are GitHub issues, linked from the item they block. [#70](https://github.com/zfleeman/ichabod-crane/issues/70) decides when this list moves into issues.
 
 ### Rebuild the box
 
@@ -192,7 +192,7 @@ What stands between the repository and the state described above. Tick them off 
 
 ### Build the runtime
 
-- [ ] **Prove Pi.** Install `pi` as `ichabod`, run `scout.md` by hand, and measure the real preamble off the first usage event. Confirm whether `-p` is shorthand for `--mode print`, so no script combines two modes that silently override each other.
+- [ ] **Prove Pi.** Install `pi`, run `scout.md` by hand, and measure the real preamble off the first usage event. Confirm whether `-p` is shorthand for `--mode print`, so no script combines two modes that silently override each other. Where Pi is installed is [#67](https://github.com/zfleeman/ichabod-crane/issues/67).
 - [ ] **Fix `run`'s cost line.** Its `jq` guesses at the usage field names; read a real `--mode json` stream and correct it.
 - [ ] **Make `timeout` kill Pi's children.** `timeout` signals its direct child, so a `bash` tool call can outlive it and keep spending. Check it, and add `--kill-after` or a process-group kill if needed.
 - [ ] **Tell a skipped run from a failed one.** A run skipped by the lock exits 1 and leaves an empty log. `flock -n -E 75` with a clean early exit on 75 fixes that.
@@ -201,10 +201,10 @@ What stands between the repository and the state described above. Tick them off 
 - [ ] **Prove `send-mail`** with a real email arriving with the right envelope sender, and a `--in-reply-to` reply threading under the original in Gmail. Its rules are unit tested in `tests/`; the real mailbox is not.
 - [ ] **Write `route.md` and delete `director.md`.** `director.md` is still written against the old workboard CLI. Carry over what it learned: read `backlog` before concluding there is nothing to do, dispatch one build-heavy card at a time, treat a `running` card that has not moved in an hour as stuck, close `review` only on work actually watched, and check `MEMORY.md` against its band. Add the `usage` check from [Models and usage](#models-and-usage) before a `wild-work` card moves to `ready`, and have `scout.md` skip its proposal at the same threshold. Drop the projection one-liner and the twin-card workaround, since Kanboard returns small results and tasks can be edited in place.
 - [ ] **Write `work.md`.** Uncomment the `route` and `work` lines in `home/crontab` once both prompts exist.
-- [ ] **Check `scout.md` and `digest.md`** against the real board.
+- [ ] **Check `scout.md` and `digest.md`** against the real board, after [#68](https://github.com/zfleeman/ichabod-crane/issues/68) decides whether strangers' issues reach `scout` at all.
 - [ ] **Prove the membrane.** `receive-mail` and `membrane.md` are written to [MEMBRANE.md](MEMBRANE.md) but have never touched a real mailbox or model. They need a working `send-mail`, and `pi` resolvable on `PATH=/usr/bin`. The gate, the DMARC check and the output validator are unit tested in `tests/`; the model and the mailbox are not. Confirm Pi reads piped stdin alongside `@membrane.md` in `-p` mode, and that a filed message lands in `Archive`. All four of [its tests](MEMBRANE.md#how-to-test-it) pass before the `receive-mail` line in `home/crontab` is uncommented.
 - [ ] **Clone the fork.** `ich4bod/ichabod-crane` into `src/ichabod-crane`, with `upstream` pointing at `zfleeman/ichabod-crane`, as the `proposing-changes` skill expects.
-- [ ] **Write `health`,** and prove it shouts when a pass has not succeeded.
+- [ ] **Write `health`,** and prove it shouts when a pass has not succeeded. How it shouts when mail is broken is [#69](https://github.com/zfleeman/ichabod-crane/issues/69).
 
 ### Prove it
 
@@ -217,5 +217,4 @@ What stands between the repository and the state described above. Tick them off 
 
 - Which OpenAI model does each job, and does Plus cover the crontab and the workers or does it need Pro?
 - Is one Kanboard project with columns enough, or does `route` want swimlanes per kind of work?
-- `scout` reads GitHub issues, and `ichabod-crane` is public, so a stranger's issue body reaches an agent with tools. Should issues from anyone but `zfleeman` go through the membrane the way email does?
 - Is `t3a.large` still the right size? It was chosen when the box also ran a Node gateway and a sandbox image.
