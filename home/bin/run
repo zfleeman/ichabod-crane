@@ -4,36 +4,38 @@
 set -euo pipefail
 name="$1"
 set -a; . /home/ichabod/.config/ichabod/env; set +a
+mkdir -p /home/ichabod/.local/state
+
+# One run of each pass at a time. The lock comes first, so a skipped run quits before it has made a log or a cost line.
+exec 9> "/home/ichabod/.local/state/$name.lock"
+if ! flock -n 9; then
+  echo "$(date +%FT%T%z) run: $name skipped, the previous run is still going" >&2
+  exit 0
+fi
+
 day="$(date +%F)"; out="/home/ichabod/log/$day/$(date +%H%M)-$name.jsonl"
-mkdir -p "/home/ichabod/log/$day" /home/ichabod/.local/state /home/ichabod/workspace/own-skills
+mkdir -p "/home/ichabod/log/$day" /home/ichabod/workspace/own-skills
 
 # Pi has no working-directory flag; it reads AGENTS.md from the directory it starts in.
 cd /home/ichabod/workspace
 
 # --no-skills plus --skill loads exactly Zach's skills and Ichabod's own, without depending on project trust.
 # --no-extensions because an extension can add tools and preamble.
+# 9>&- keeps the lock out of pi, so a process Ichabod leaves running in the background cannot hold it forever.
 # rc is pi's exit code, kept so a failed pass still gets its cost line before this script exits with it.
 rc=0
-flock -n -E 75 "/home/ichabod/.local/state/$name.lock" \
-  timeout 1800 \
+timeout 1800 \
   pi --mode json --tools read,write,edit,bash --no-session \
      --no-extensions --no-skills \
      --skill /home/ichabod/workspace/skills --skill /home/ichabod/workspace/own-skills \
-     @"/home/ichabod/prompts/$name.md" > "$out" || rc=$?
-
-# 75 means the lock was held: the previous run is still going. Not a failure, and nothing ran to log or cost.
-if [ "$rc" = 75 ]; then
-  rm -f "$out"
-  echo "run: $name skipped, the previous run still holds the lock" >&2
-  exit 0
-fi
+     @"/home/ichabod/prompts/$name.md" > "$out" 9>&- || rc=$?
 
 # Tokens per run, one line per pass. Field names are a guess until someone reads
 # a real event; do not trust this jq as written.
 # A crashed pi can leave a log that is not JSON; say so rather than let set -e replace pi's exit code with jq's.
-jq -s '[.[] | .usage // empty] | {pass: "'"$name"'",
+jq -cs '[.[] | .usage // empty] | {pass: "'"$name"'",
        in: (map(.input_tokens) | add), out: (map(.output_tokens) | add)}' \
-  "$out" >> /home/ichabod/log/cost.jsonl || echo "run: no cost line for $name, $out is not JSON" >&2
+  "$out" >> /home/ichabod/log/cost.jsonl || echo "$(date +%FT%T%z) run: no cost line for $name, $out is not JSON" >&2
 
 # health turns this into a CloudWatch heartbeat.
 if [ "$rc" = 0 ]; then touch "/home/ichabod/.local/state/$name.ok"; fi

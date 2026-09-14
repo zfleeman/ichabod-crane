@@ -100,7 +100,7 @@ memory/
 
 [`run`](../home/bin/run) is the whole harness.
 
-- **`flock -n`** is the concurrency rule: if the previous run of that pass is still going, this one exits 0 rather than stacking, and leaves no log, cost line or success marker.
+- **`flock -n`** is the concurrency rule: if the previous run of that pass is still going, this one exits 0 rather than stacking. It takes the lock before anything else, so a skipped run leaves no log, cost line or success marker, only a line in `log/run.log`.
 - **`timeout`** is stall recovery. A pass that hangs is killed, and its log up to the kill survives.
 - **`rc` is Pi's exit code**, where 0 means success. `run` saves it instead of letting `set -e` stop the script on a failure, so a failed pass still gets its line in `cost.jsonl`, and then exits with that code so a failed pass leaves no success marker for `health`.
 - **It `cd`s into `workspace/`**, because Pi has no working-directory flag and finds `AGENTS.md` in the directory it starts in.
