@@ -66,10 +66,13 @@ email ──> receive-mail (Python) ──> pi, with no tools ──> JSON on st
 
 1. Exactly one `From` header carrying exactly one address. This stops header stuffing.
 2. The address is on the allowlist, which is Zach's address and nothing else. Display names and `Reply-To` grant nothing.
-3. The message is less than 48 hours old.
-4. DMARC passes with alignment, **verified by `receive-mail` against the raw message**, not read off the provider's `Authentication-Results` header.
+3. Exactly one `Date` header, less than 48 hours old.
+4. Ichabod's address is in the one `To` or `Cc` header.
+5. DMARC passes with alignment, **verified by `receive-mail` against the raw message**, not read off the provider's `Authentication-Results` header. The passing signature must cover `From`, `Date`, and the header that names Ichabod.
 
-Every failure fails closed: an empty allowlist admits no one, and a credential that will not load is an error that emails Zach, never a skipped mailbox that looks like a quiet day. A message that passes is marked so it is never processed twice — by IMAP UID, with its `Message-ID` as a second check. Nothing has read the body yet.
+Rules 3 to 5 stop a replay. Anyone holding an old email Zach sent them could otherwise re-send it unchanged, with its signature still valid. The age comes from the signed `Date` rather than the time it arrived, and the signed recipient means an email Zach sent to someone else never counts. Each of those headers must appear once, because DKIM signs the last copy of a header and Python reads the first, so a second copy added on top would be read without being signed.
+
+Every failure fails closed: an empty allowlist admits no one, a message the parsers cannot read is rejected rather than left to crash every run, and a credential that will not load is an error that emails Zach once a day, never a skipped mailbox that looks like a quiet day. A DNS lookup that times out is an outage, not a verdict: the message stays unread and the next run retries it, the same as a failed reader. A message that passes is marked so it is never processed twice — by IMAP UID, with its `Message-ID` as a second check. A rejected message's `Message-ID` claims nothing, so Zach can drag it back to the inbox to retry it. Nothing has read the body yet.
 
 ### Step 2 — Read, with nothing
 

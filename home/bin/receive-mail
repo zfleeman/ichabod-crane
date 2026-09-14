@@ -17,6 +17,7 @@ import email.policy
 import fcntl
 import imaplib
 import json
+import pathlib
 import re
 import subprocess
 import sys
@@ -31,15 +32,21 @@ HOME = "/home/ichabod"
 IMAP_HOST = "imap.fastmail.com"
 IMAP_USER = "ichabod@ichabod-crane.net"
 ALLOWED_SENDERS = {"zfleeman@gmail.com"}
+# Measured from the signed Date header, so an old signed email re-sent today is still old.
 MAX_AGE_SECONDS = 48 * 3600
+MAX_CLOCK_SKEW_SECONDS = 3600
 MAX_BODY_CHARS = 100_000
 REJECTED_FOLDER = "Rejected"
 QUARANTINE_FOLDER = "Quarantine"
 ARCHIVE_FOLDER = "Archive"
+ENV_FILE = f"{HOME}/.config/ichabod/env"
 STATE_FILE = f"{HOME}/.local/state/receive-mail-seen.jsonl"
 LOCK_FILE = f"{HOME}/.local/state/receive-mail.lock"
 # Touched after a clean run; health turns it into a CloudWatch heartbeat.
 OK_FILE = f"{HOME}/.local/state/receive-mail.ok"
+# Touched when Zach is told the mailbox will not open, so a revoked password emails him once a day, not every run.
+LOGIN_ALERT_FILE = f"{HOME}/.local/state/receive-mail-login-alert"
+LOGIN_ALERT_EVERY_SECONDS = 24 * 3600
 
 READER = [
     "/usr/bin/env", "-i", "HOME=/tmp", "PATH=/usr/bin",
@@ -61,6 +68,10 @@ class Quarantine(Exception):
     """The message passed the gate but the reader's output could not be trusted into a card."""
 
 
+class DnsUnavailable(Exception):
+    """DNS could not answer. An outage, not a verdict: the message stays unread and is retried next run."""
+
+
 def log(uid, outcome, reason=""):
     # Fixed strings only. Hostile text stays out of log/, which the passes read.
     print(f"{datetime.now(UTC).isoformat(timespec='seconds')} uid={uid} {outcome} {reason}".rstrip())
@@ -74,11 +85,14 @@ def tell_zach(subject, body):
 def load_env():
     # The same file the bash wrappers source, in set-secret's NAME='value' format.
     env = {}
-    with open(f"{HOME}/.config/ichabod/env") as f:
+    with open(ENV_FILE) as f:
         for line in f:
             name, sep, value = line.strip().partition("=")
             if sep and not name.startswith("#"):
-                env[name] = value.strip("'\"")
+                # Remove exactly the one pair of quotes set-secret wraps the value in, never a quote that is part of it.
+                if len(value) >= 2 and value[0] == value[-1] == "'":
+                    value = value[1:-1]
+                env[name] = value
     return env
 
 
@@ -89,7 +103,9 @@ def read_state():
             for line in f:
                 row = json.loads(line)
                 seen_uids.add((row["uidvalidity"], row["uid"]))
-                if row["message_id"]:
+                # A rejected message's Message-ID claims nothing: Zach can drag it back to retry it, and a stranger
+                # cannot block a real message by sending a rejected one with its Message-ID first.
+                if row["message_id"] and row["outcome"] != "rejected":
                     seen_message_ids.add(row["message_id"])
     except FileNotFoundError:
         pass
@@ -102,57 +118,122 @@ def record(uidvalidity, uid, message_id, outcome):
         f.write(json.dumps(row | {"at": int(time.time())}) + "\n")
 
 
-def gate(msg, raw, received_at):
-    """Return None if the message may be read, or a fixed-string reason it may not."""
-    froms = msg.get_all("From") or []
-    if len(froms) != 1 or froms[0].defects or len(froms[0].addresses) != 1:
-        return "not exactly one From header with one address"
-    address = froms[0].addresses[0].addr_spec.lower()
-    if address not in ALLOWED_SENDERS:
-        return "sender not on the allowlist"
-    if time.time() - received_at > MAX_AGE_SECONDS:
-        return "older than 48 hours"
-    if not dmarc_passes(raw, address.rpartition("@")[2]):
-        return "DMARC did not pass with alignment"
+def gate(msg, raw):
+    """Return None if the message may be read, or a fixed-string reason it may not.
+
+    Raises DnsUnavailable when DNS cannot answer, so a real message is retried rather than rejected.
+    """
+    try:
+        froms = msg.get_all("From") or []
+        if len(froms) != 1 or froms[0].defects or len(froms[0].addresses) != 1:
+            return "not exactly one From header with one address"
+        address = froms[0].addresses[0].addr_spec.lower()
+        if address not in ALLOWED_SENDERS:
+            return "sender not on the allowlist"
+
+        # Exactly one of each header the signature must cover. DKIM signs the last copy of a header, and Python
+        # reads the first, so a second copy added above a signed one would be read without being signed.
+        dates = msg.get_all("Date") or []
+        if len(dates) != 1 or dates[0].datetime is None:
+            return "not exactly one valid Date header"
+        sent_at = dates[0].datetime
+        if sent_at.tzinfo is None:
+            sent_at = sent_at.replace(tzinfo=UTC)  # "-0000" means UTC with no zone given
+        age = time.time() - sent_at.timestamp()
+        if age > MAX_AGE_SECONDS or age < -MAX_CLOCK_SKEW_SECONDS:
+            return "Date header is not within the last 48 hours"
+        recipient_header = header_naming(msg, IMAP_USER)
+        if recipient_header is None:
+            return "not addressed to Ichabod in one To or Cc header"
+
+        signed_headers = aligned_signature(raw, address.rpartition("@")[2])
+        if signed_headers is None:
+            return "DMARC did not pass with alignment"
+        # Without these, an old email Zach sent someone else could be re-sent to Ichabod with its signature intact.
+        if not {b"from", b"date", recipient_header.encode()} <= signed_headers:
+            return "signature does not cover From, Date and the recipient header"
+        return None
+    except DnsUnavailable:
+        raise
+    except Exception as e:  # noqa: BLE001 -- the stdlib and dkimpy parsers crash on some malformed messages
+        # A crash here would leave the message unread and block every message behind it, so it is rejected.
+        return f"message could not be parsed ({type(e).__name__})"
+
+
+def header_naming(msg, address):
+    """Return "to" or "cc", whichever names the address, or None. Either header appearing twice is None."""
+    tos, ccs = msg.get_all("To") or [], msg.get_all("Cc") or []
+    if len(tos) > 1 or len(ccs) > 1:
+        return None
+    for name, found in (("to", tos), ("cc", ccs)):
+        if found and address in {a.addr_spec.lower() for a in found[0].addresses}:
+            return name
     return None
 
 
-def dmarc_passes(raw, from_domain):
+def txt_records(name):
+    """The TXT strings at name, or [] when it has none. Raises DnsUnavailable when DNS could not answer."""
+    try:
+        answer = dns.resolver.resolve(name, "TXT")
+    except (dns.exception.Timeout, dns.resolver.NoNameservers, dns.resolver.NoResolverConfiguration):
+        raise DnsUnavailable from None
+    except dns.exception.DNSException:  # NXDOMAIN, no TXT answer, or a name that is not valid DNS
+        return []
+    return [b"".join(r.strings) for r in answer]
+
+
+def aligned_signature(raw, from_domain):
+    """Return the header names covered by a DKIM signature that verifies and aligns with from_domain, or None."""
     # Verified here against the raw message, never read off the provider's Authentication-Results.
     # SPF cannot be checked after delivery, so a pass means a DKIM signature that verifies and whose
     # d= is exactly the From domain. That is strict alignment, stricter than DMARC's relaxed default.
-    try:
-        records = dns.resolver.resolve(f"_dmarc.{from_domain}", "TXT")
-    except dns.exception.DNSException:
-        return False
-    if not any(b"".join(r.strings).startswith(b"v=DMARC1") for r in records):
-        return False
+    if not any(r.startswith(b"v=DMARC1") for r in txt_records(f"_dmarc.{from_domain}")):
+        return None
 
-    for idx in range(len(email.message_from_bytes(raw).get_all("DKIM-Signature") or [])):
-        d = dkim.DKIM(raw, minkey=1024)
+    def key_lookup(name, timeout=5):
+        # Only a key under the From domain can make a signature count, so a domain the sender picked is never queried.
+        # That also keeps a sender's slow nameserver from passing for an outage that holds the message unread.
         try:
-            if not d.verify(idx=idx):
+            name = name.decode("ascii").lower()
+        except UnicodeDecodeError:
+            return None
+        if not name.endswith(f"._domainkey.{from_domain}."):
+            return None
+        records = txt_records(name)
+        return records[0] if records else None
+
+    try:
+        count = len(email.message_from_bytes(raw).get_all("DKIM-Signature") or [])
+    except Exception:  # noqa: BLE001 -- unparseable means unsigned
+        return None
+    for idx in range(count):
+        try:
+            d = dkim.DKIM(raw, minkey=1024)  # parses the message, and raises on a header line with no colon
+            if not d.verify(idx=idx, dnsfunc=key_lookup):
                 continue
+        except DnsUnavailable:
+            raise
         except Exception:  # noqa: BLE001, S112 -- any failure to verify is a signature that does not count
             continue
         # l= signs only part of the body, so anything appended after it would ride on the signature.
         aligned = d.domain.decode("ascii", "replace").lower() == from_domain
-        if aligned and b"from" in d.include_headers and b"l" not in d.signature_fields:
-            return True
-    return False
+        if aligned and b"l" not in d.signature_fields:
+            return set(d.include_headers)
+    return None
 
 
 def reader_input(msg):
-    part = msg.get_body(preferencelist=("plain", "html"))
-    if part is None:
-        raise Quarantine("no text or HTML body")
     try:
-        body = part.get_content()
-    except (LookupError, ValueError):
-        raise Quarantine("body could not be decoded") from None
+        part = msg.get_body(preferencelist=("plain", "html"))
+        body = None if part is None else part.get_content()
+        subject = msg.get("Subject", "")
+    except Exception:  # noqa: BLE001 -- an unknown charset, bad encoding, or a header the stdlib parser crashes on
+        raise Quarantine("body or subject could not be decoded") from None
+    if body is None:
+        raise Quarantine("no text or HTML body")
     if len(body) > MAX_BODY_CHARS:
         raise Quarantine(f"body is over {MAX_BODY_CHARS} characters")
-    return f"Subject: {msg.get('Subject', '')}\n\n{body}"
+    return f"Subject: {subject}\n\n{body}"
 
 
 def parse_reader_output(text):
@@ -232,8 +313,11 @@ def file_card(card, address, message_id, date_header, received_at):
 
 def header_text(msg, name, limit=200):
     # Headers receive-mail writes onto the card itself, flattened to one bounded line.
-    value = " ".join(str(msg.get(name, "")).split())
-    return value[:limit]
+    try:
+        value = str(msg.get(name, ""))
+    except Exception:  # noqa: BLE001 -- the stdlib parser crashes on some malformed headers, such as "<a@["
+        return ""
+    return " ".join(value.split())[:limit]
 
 
 def process(imap, uid, uidvalidity, seen_uids, seen_message_ids):
@@ -250,17 +334,18 @@ def process(imap, uid, uidvalidity, seen_uids, seen_message_ids):
         imap.uid("STORE", uid, "+FLAGS", "(\\Seen)")
         log(uid, "skipped", "already processed")
         return False
-    # Claimed in memory now, so a second copy of the same Message-ID later in this run is skipped too.
     seen_uids.add((uidvalidity, int(uid)))
-    if message_id:
-        seen_message_ids.add(message_id)
 
-    reason = gate(msg, raw, received_at)
+    # DnsUnavailable is not caught: like a failed reader, the message stays unread and the next run retries it.
+    reason = gate(msg, raw)
     if reason:
         imap.uid("MOVE", uid, REJECTED_FOLDER)
         record(uidvalidity, int(uid), message_id, "rejected")
         log(uid, "rejected", reason)
         return False
+    # Claimed only once past the gate, so a second copy of the same Message-ID later in this run is skipped too.
+    if message_id:
+        seen_message_ids.add(message_id)
 
     # Past the gate: from here on, the body is read, but only by the reader.
     address = msg.get_all("From")[0].addresses[0].addr_spec.lower()
@@ -286,6 +371,13 @@ def process(imap, uid, uidvalidity, seen_uids, seen_message_ids):
     return True
 
 
+def login_alert_due(now):
+    try:
+        return now - pathlib.Path(LOGIN_ALERT_FILE).stat().st_mtime >= LOGIN_ALERT_EVERY_SECONDS
+    except FileNotFoundError:
+        return True
+
+
 def main():
     # One receive-mail at a time, so a slow reader call cannot overlap the next run and take the same message.
     lock = open(LOCK_FILE, "w")  # noqa: SIM115 -- held open for the whole run; closing it releases the lock
@@ -305,12 +397,17 @@ def main():
     except (OSError, ValueError, imaplib.IMAP4.error) as e:
         # Only the exception type: an IMAP error can echo what was sent.
         log("-", "error", f"mailbox did not open: {type(e).__name__}")
-        tell_zach(
-            "receive-mail cannot open the mailbox",
-            f"receive-mail could not log in to {IMAP_USER} ({type(e).__name__}). No mail is being read.\n"
-            "If the app password is wrong or revoked, set a new one with: make secret NAME=IMAP_PASSWORD\n",
-        )
+        if login_alert_due(time.time()):
+            tell_zach(
+                "receive-mail cannot open the mailbox",
+                f"receive-mail could not log in to {IMAP_USER} ({type(e).__name__}). No mail is being read.\n"
+                "If the app password is wrong or revoked, set a new one with: make secret NAME=IMAP_PASSWORD\n"
+                "You will get this email again in 24 hours if it is still broken.\n",
+            )
+            pathlib.Path(LOGIN_ALERT_FILE).touch()
         return 1
+    # Logged in, so the next failure is news again.
+    pathlib.Path(LOGIN_ALERT_FILE).unlink(missing_ok=True)
 
     try:
         for folder in (REJECTED_FOLDER, QUARANTINE_FOLDER, ARCHIVE_FOLDER):
@@ -328,7 +425,7 @@ def main():
                 reads += 1
     finally:
         imap.logout()
-    open(OK_FILE, "w").close()
+    pathlib.Path(OK_FILE).touch()
     return 0
 
 

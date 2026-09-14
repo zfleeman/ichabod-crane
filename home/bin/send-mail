@@ -37,7 +37,10 @@ def load_env():
         for line in f:
             name, sep, value = line.strip().partition("=")
             if sep and not name.startswith("#"):
-                env[name] = value.strip("'\"")
+                # Remove exactly the one pair of quotes set-secret wraps the value in, never a quote that is part of it.
+                if len(value) >= 2 and value[0] == value[-1] == "'":
+                    value = value[1:-1]
+                env[name] = value
     return env
 
 

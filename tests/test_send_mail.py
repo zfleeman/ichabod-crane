@@ -162,3 +162,9 @@ def test_missing_password_fails_loudly(box, monkeypatch):
     (home / "env").write_text("KANBOARD_TOKEN='x'\n")
     assert run(monkeypatch, ["Subject"]) == 1
     assert FakeSMTP.sent == []
+
+
+def test_quotes_that_are_part_of_the_password_are_kept(box):
+    home, _ = box
+    (home / "env").write_text("""SMTP_PASSWORD='"quoted"'\n""")
+    assert sm.load_env() == {"SMTP_PASSWORD": '"quoted"'}

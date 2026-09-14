@@ -228,7 +228,7 @@ Stopping EC2 does not stop EBS, Elastic IP, domain or snapshot charges.
 | Host is slow | `free -h`, swap, CPU credit balance, concurrent builds, container limits |
 | Disk fills | `docker system df`, logs, build cache, old images. Preserve volumes |
 | A pass did not run | `/etc/cron.d/ichabod-schedule` exists, today's `log/` directory, a lock left in `.local/state/`, `log/usage.jsonl` for a hit limit |
-| An email made no card | Sender allowlist, DMARC result, the quarantine folder |
+| An email made no card | `log/receive-mail.log` for the reason, then the Rejected and Quarantine folders. Ichabod must be in `To` or `Cc`, not `Bcc` |
 
 # 9. References
 
