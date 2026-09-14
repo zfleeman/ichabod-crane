@@ -2,7 +2,7 @@
 
 Why the agent runtime on the box is built the way it is: Pi, cron, memory, the board, and mail. The machine underneath is [ICHABOD-GUIDE.md](ICHABOD-GUIDE.md), and the mail boundary is [MEMBRANE.md](MEMBRANE.md). What each script does is in its header comment; this document only covers the choices behind them.
 
-The goal is a box one person can understand all at once: a few shell scripts, a crontab, prompt files, and `pi`. No daemon, no plugins, no dashboard, nothing to keep alive.
+The goal is a box one person can understand all at once: a few shell scripts, a crontab, prompt files, and `pi`. No daemon, one extension, no dashboard, nothing to keep alive.
 
 ## Why Pi and cron
 
@@ -22,9 +22,9 @@ Each pass is one prompt file in `home/prompts/`, run by `run` from cron. The pro
 
 ## Memory
 
-Every run starts with an empty context. Pi loads `workspace/AGENTS.md` by itself, and the agent reads everything else on purpose, with `read` or `grep`, when the work calls for it. That keeps the preamble small, and it means the file layout is the memory design. `AGENTS.md` holds the exact rules, because it is the one file the agent is guaranteed to see.
+Every run starts with an empty context. Pi loads `workspace/AGENTS.md` by itself, and `run` appends `MEMORY.md` to the system prompt, so both are in every pass without the agent having to decide to read them. That is also why both have to stay small. The agent reads everything else on purpose, with `read` or `grep`, when the work calls for it, so the file layout is the memory design. `AGENTS.md` holds Zach's rules and preferences, and `MEMORY.md` holds what Ichabod has learned.
 
-**A fact moves up as it proves it will last.** It starts as a comment on a card or a journal entry. When it will still matter in a month, it becomes one line in `MEMORY.md`, and the detail stays behind.
+**A fact moves up as it proves it will last.** It starts as a comment on a card or a journal entry. When it will still matter in a month, it becomes one line in `MEMORY.md`, and the detail stays behind. A lesson too important to be pruned in a curation goes one step further: Ichabod proposes it for `AGENTS.md` by pull request, which he cannot edit or prune himself.
 
 **Only one `AGENTS.md` may exist.** Pi looks for `AGENTS.md` in `~/.pi/agent/`, in every parent of the directory it starts in, and in that directory. Creating `/home/ichabod/AGENTS.md` would silently add to every run's preamble.
 
@@ -42,7 +42,9 @@ Every run starts with an empty context. Pi loads `workspace/AGENTS.md` by itself
 
 **Passes run with `--no-session`.** The JSON log already records every message and tool call. What is lost is reopening a finished pass to ask why it did something. `--session-dir /home/ichabod/log/sessions` would bring that back, at the cost of a second copy of every run on disk.
 
-**Skill folders are passed explicitly.** Pi ignores project-local skill folders in `--mode json` unless the project is trusted, so `run` names Zach's `skills/` and Ichabod's `own-skills/` and loads nothing global.
+**Skill folders are passed explicitly.** Pi ignores project-local skill folders in `--mode json` unless the project is trusted, so `run` names Zach's `skills/` and Ichabod's `own-skills/` and loads nothing global. Only each skill's name and description go into the prompt; the agent reads a `SKILL.md` when a task matches it.
+
+**One extension, `pi-web-access`, for the web.** Ichabod could already `curl` a page, but search and readable page text are worth a few tool schemas of preamble. `run` loads it by path from the root-owned global install, so Ichabod cannot swap it, and `--no-extensions` still keeps anything else out. Web pages are untrusted text reaching an agent with a shell, the same as `curl` output always was. Headless, its searches return raw results rather than opening its browser curator. On the ChatGPT login they draw on the same allowance, which `usage` sees and `cost.jsonl` does not, because the extension makes those calls itself.
 
 **Never pass a prompt through `sudo -iu`.** The `-i` login shell re-parses the command line, so the backticks in a Markdown prompt get executed. Cron runs as `ichabod` and needs no `sudo`.
 

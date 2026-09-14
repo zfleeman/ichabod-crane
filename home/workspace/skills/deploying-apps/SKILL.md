@@ -1,7 +1,6 @@
 ---
 name: deploying-apps
 description: Use when building, deploying, restarting, or removing anything that runs in Docker on this host — application containers under /home/ichabod/apps, Traefik, or volumes.
-user-invocable: false
 ---
 
 # Deploying apps

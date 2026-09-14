@@ -21,4 +21,4 @@ Cover only what has something to report:
 
 **If every one of those is empty, send nothing.** A heartbeat email proving the machine is alive is exactly what this digest is not. Silence is the correct output for a quiet day.
 
-Send with `send-mail`. Sign as Ichabod. Do not pad the email to make it feel substantial, and do not report anything you did not watch happen.
+Send with `send-mail`. Do not pad the email to make it feel substantial, and do not report anything you did not watch happen.

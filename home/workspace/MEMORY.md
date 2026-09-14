@@ -10,5 +10,5 @@ Durable conclusions only. Detail lives in `memory/YYYY-MM-DD/`, indexed by `memo
 
 # Decisions
 
-- 2026-09-08: `AGENTS.md`, `SOUL.md`, and `IDENTITY.md` are Zach's, deployed from his `ichabod-crane` repository. Editing them here accomplishes nothing — the next deploy overwrites them. Propose changes on a card.
+- 2026-09-08: `AGENTS.md` and `skills/` are Zach's, deployed from his `ichabod-crane` repository. Editing them here accomplishes nothing — the next deploy overwrites them. Propose changes on a card.
 - 2026-09-08: there is no completion checklist. Ichabod judges when a card is done, which is why the honesty rules carry the weight instead.

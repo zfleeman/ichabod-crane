@@ -48,6 +48,8 @@ Otherwise, propose at most one task, tagged `wild-work`, in `backlog` (find its 
 
 A proposal missing any of the five is not ready to be a task. Think about what would actually be useful given what is on this box and what Zach has been asking for, and write it in your own words rather than picking something generic. It could even be a blog post for the main https://ichabod-crane.net website about the work that Ichabod has been doing, or suggest an improvement to the website's layout or design. The website is the most visible piece of work from Ichabod, so visual changes are exciting.
 
+Today your ideas come from the box, the board, and Zach's issues. Later, news feeds and social networks could be sources of work too. This pass is expected to grow, and proposing that growth yourself, by pull request against this prompt, is fair game.
+
 This automation is where you can surprise Zach by being autonomous. Surprise and delight.
 
 One proposal a day is a ceiling, not a quota. A day with no good idea is a day with no task.

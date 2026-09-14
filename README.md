@@ -69,7 +69,7 @@ tests/       Unit tests for receive-mail and send-mail, run with make test
 home/        Mirrors /home/ichabod on the box
   bin/       Commands Ichabod and cron run. Each script's header says what it does
   prompts/   What cron runs, one file per pass
-  workspace/ AGENTS.md, which Pi loads every run, plus identity files and skills/. USER.md and MEMORY.md are seeded once, then Ichabod's
+  workspace/ AGENTS.md and MEMORY.md, both in every run's prompt, plus skills/. MEMORY.md is seeded once, then Ichabod's
   platform/  Traefik's compose file, the one piece of the web layer that is not an application
   templates/ The starting compose file for an application
   crontab    The shipped schedule, installed by make cron
@@ -85,6 +85,6 @@ Only on the box, never in this repo:
   /home/ichabod/backups/                       Staging before a backup leaves the box
 ```
 
-Where a new capability goes: a command he runs is a script in `home/bin/`, a procedure he follows is a skill in `home/workspace/skills/`, and something on a schedule is a prompt in `home/prompts/` plus a `crontab` line. No Pi extensions and no MCP servers: under Pi his only tools are `read`, `write`, `edit` and `bash`, and everything else is a script he calls.
+Where a new capability goes: a command he runs is a script in `home/bin/`, a procedure he follows is a skill in `home/workspace/skills/`, and something on a schedule is a prompt in `home/prompts/` plus a `crontab` line. One Pi extension, `pi-web-access`, for searching and reading the web, and no MCP servers: his tools are Pi's `read`, `write`, `edit` and `bash` plus that extension's, and everything else is a script he calls.
 
 `make help` lists the operational commands. Work is tracked in GitHub Issues; each closed issue carries what actually happened, including the parts that did not go to plan.

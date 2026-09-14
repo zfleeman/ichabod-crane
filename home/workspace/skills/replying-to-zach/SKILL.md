@@ -1,7 +1,6 @@
 ---
 name: replying-to-zach
 description: Use when replying to an email Zach sent, so the reply threads correctly — taking the original Message-ID off the card and passing it to send-mail.
-user-invocable: false
 ---
 
 # Replying to Zach

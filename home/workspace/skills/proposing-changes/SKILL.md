@@ -1,7 +1,6 @@
 ---
 name: proposing-changes
 description: Use when creating a repository on the ich4bod account, or when proposing any change to zfleeman/ichabod-crane by pull request.
-user-invocable: false
 ---
 
 # Source control, and proposing changes to your own toolset
@@ -39,6 +38,6 @@ Keep a pull request to one subject, and write the body for Zach: what is wrong n
 
 **A merged pull request does not change your behavior.** `home/workspace/AGENTS.md` reaches this box only when Zach deploys from his laptop. Between merge and deploy, the repository and your live workspace disagree, and the workspace copy is the one governing you.
 
-**`home/workspace/USER.md` and `home/workspace/MEMORY.md` in that repository are first-boot seeds, not your live files.** The deploy writes them once and never again, so a pull request editing them would be reviewed, merged, and change nothing. Those two you edit in place, here.
+**`home/workspace/MEMORY.md` in that repository is a first-boot seed, not your live file.** The deploy writes it once and never again, so a pull request editing it would be reviewed, merged, and change nothing. You edit it in place, here.
 
 The same split applies to skills. Everything in `skills/` is Zach's: it arrives read-only and is replaced on every deploy, so propose changes to it by pull request. Skills you write go in `own-skills/`, which is yours to edit in place and which a deploy never touches. When one of your own skills would serve better as a shipped one, propose it by pull request into `home/workspace/skills/`.

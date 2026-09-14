@@ -20,17 +20,20 @@ mkdir -p "/home/ichabod/log/$day" /home/ichabod/workspace/own-skills
 cd /home/ichabod/workspace
 
 # --no-skills plus --skill loads exactly Zach's skills and Ichabod's own, without depending on project trust.
-# --no-extensions because an extension can add tools and preamble.
-# Re-check --tools after every Pi upgrade: a tool name can keep its name and change what it does.
+# --no-extensions because an extension can add tools and preamble; -e still loads pi-web-access, root-owned in /usr/lib.
+# Re-check --tools after every Pi or pi-web-access upgrade: a tool can keep its name and change what it does.
+# MEMORY.md is appended to the system prompt, so every pass starts with it rather than deciding whether to read it.
 # 9>&- keeps the lock out of pi, so a process Ichabod leaves running in the background cannot hold it forever.
 # pi's stderr gets a file beside its log, so passes running at once never mix their output in log/run.log.
 # rc is pi's exit code, kept so a failed pass still gets its cost line before this script exits with it.
 # timeout recovers a hung pass; its log up to the kill survives.
 rc=0
 timeout 1800 \
-  pi --mode json --tools read,write,edit,bash --no-session \
-     --no-extensions --no-skills \
-     --skill /home/ichabod/workspace/skills --skill /home/ichabod/workspace/own-skills \
+  pi --mode json --no-session \
+     --tools read,write,edit,bash,web_search,fetch_content,get_search_content \
+     --no-extensions -e /usr/lib/node_modules/pi-web-access \
+     --no-skills --skill /home/ichabod/workspace/skills --skill /home/ichabod/workspace/own-skills \
+     --append-system-prompt /home/ichabod/workspace/MEMORY.md \
      @"/home/ichabod/prompts/$name.md" > "$out" 2> "$err" 9>&- || rc=$?
 # Most runs print nothing there, and an empty file is only clutter.
 [ -s "$err" ] || rm -f "$err"
