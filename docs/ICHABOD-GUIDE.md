@@ -51,7 +51,7 @@ Account passwords and recovery codes never go on the instance; only the tokens l
 
 **Domain.** Route 53 is authoritative for `ichabod-crane.net`, web and mail records both. An apex and a wildcard A record point at the Elastic IP; the wildcard does not answer for the apex, so both exist. The board's `ichabod-board.zfleeman.com` record is in `tofu/` too, and points at Zach's Synology rather than the box.
 
-**Email.** A paid mailbox with a custom domain, real IMAP, real SMTP and app passwords. Fastmail Standard is the floor there, since Basic has no third-party IMAP. App passwords rather than OAuth: scoped to mail, revocable on their own, and they do not expire mid-week. There are two, one for `receive-mail` and one for `send-mail`, so sending can be revoked without breaking receive-mail. DKIM is the provider's job — mail leaves through its SMTP and is signed on the way out, so nothing on the box holds a signing key. Do not self-host mail to save a few dollars; deliverability is a separate project.
+**Email.** A paid mailbox with a custom domain, real IMAP, real SMTP and app passwords. Fastmail Standard is the floor there, since Basic has no third-party IMAP. App passwords rather than OAuth: scoped to mail, revocable on their own, and they do not expire mid-week. There is one, shared by `receive-mail` and `send-mail`. DKIM is the provider's job — mail leaves through its SMTP and is signed on the way out, so nothing on the box holds a signing key. Do not self-host mail to save a few dollars; deliverability is a separate project.
 
 **Secrets.** Not AWS Secrets Manager. A root-equivalent agent with a role that can fetch a secret can fetch it anyway, so it would improve rotation, not isolation. Secrets live in one file, `/home/ichabod/.config/ichabod/env`, mode 0600, and [`env.example`](../home/.config/ichabod/env.example) lists every name it needs.
 
@@ -195,7 +195,7 @@ One layer at a time, with a current backup, the old version recorded and the rel
 Least to most severe:
 
 1. Stop the schedule: `sudo rm /etc/cron.d/ichabod-schedule`, and `sudo crontab -u ichabod -r` for any passes Ichabod scheduled himself. `make deploy` never reinstalls it; only `make cron` does.
-2. Revoke the mailbox app passwords, the GitHub token and the `ichabod` Kanboard user's token, and sign the box out of ChatGPT.
+2. Revoke the mailbox app password, the GitHub token and the `ichabod` Kanboard user's token, and sign the box out of ChatGPT.
 3. `docker compose down` in one application's directory.
 4. `make stop`.
 5. If compromise is suspected: remove public ingress, revoke credentials, snapshot the disk, and investigate a copy.

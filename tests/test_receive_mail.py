@@ -244,9 +244,9 @@ def test_login_alert_is_sent_once_a_day(tmp_path, monkeypatch):
 
 def test_env_keeps_quotes_that_are_part_of_the_value(tmp_path, monkeypatch):
     env = tmp_path / "env"
-    env.write_text("""IMAP_PASSWORD='"starts and ends with a quote"'\nPLAIN='abc'\n# COMMENTED='x'\n""")
+    env.write_text("""MAIL_PASSWORD='"starts and ends with a quote"'\nPLAIN='abc'\n# COMMENTED='x'\n""")
     monkeypatch.setattr(rm, "ENV_FILE", str(env))
-    assert rm.load_env() == {"IMAP_PASSWORD": '"starts and ends with a quote"', "PLAIN": "abc"}
+    assert rm.load_env() == {"MAIL_PASSWORD": '"starts and ends with a quote"', "PLAIN": "abc"}
 
 
 # --- The reader's flags -----------------------------------------------------------------------------------------

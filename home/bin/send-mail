@@ -115,10 +115,10 @@ def main(argv=None):
     if not body.strip():
         parser.error("the body on stdin is empty")
 
-    password = load_env().get("SMTP_PASSWORD", "")
+    password = load_env().get("MAIL_PASSWORD", "")
     if not password:
         print(
-            "send-mail: SMTP_PASSWORD is empty or missing; set it with: make secret NAME=SMTP_PASSWORD", file=sys.stderr
+            "send-mail: MAIL_PASSWORD is empty or missing; set it with: make secret NAME=MAIL_PASSWORD", file=sys.stderr
         )
         return 1
 

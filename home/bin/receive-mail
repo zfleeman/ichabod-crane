@@ -4,7 +4,7 @@
 #
 # Every flag on the reader line is load-bearing:
 #   --no-tools            the reader can act without it; this is the whole boundary
-#   env -i                the reader would inherit GH_TOKEN, KANBOARD_TOKEN, IMAP_PASSWORD, SMTP_PASSWORD
+#   env -i                the reader would inherit GH_TOKEN, KANBOARD_TOKEN, MAIL_PASSWORD
 #   PI_CODING_AGENT_DIR   the ChatGPT login, the only credential the reader gets
 #   --no-context-files    AGENTS.md would hand the reader a map of Ichabod's authority
 #   --no-skills, --no-extensions   skills are the same map, and an extension can add tools back
@@ -389,9 +389,9 @@ def main():
 
     # Fail closed and loud: a mailbox that cannot be opened must never look like a quiet day.
     try:
-        password = load_env().get("IMAP_PASSWORD", "")
+        password = load_env().get("MAIL_PASSWORD", "")
         if not password:
-            raise ValueError("IMAP_PASSWORD is empty or missing")
+            raise ValueError("MAIL_PASSWORD is empty or missing")
         imap = imaplib.IMAP4_SSL(IMAP_HOST, timeout=60)
         imap.login(IMAP_USER, password)
     except (OSError, ValueError, imaplib.IMAP4.error) as e:
@@ -401,7 +401,7 @@ def main():
             tell_zach(
                 "receive-mail cannot open the mailbox",
                 f"receive-mail could not log in to {IMAP_USER} ({type(e).__name__}). No mail is being read.\n"
-                "If the app password is wrong or revoked, set a new one with: make secret NAME=IMAP_PASSWORD\n"
+                "If the app password is wrong or revoked, set a new one with: make secret NAME=MAIL_PASSWORD\n"
                 "You will get this email again in 24 hours if it is still broken.\n",
             )
             pathlib.Path(LOGIN_ALERT_FILE).touch()

@@ -48,7 +48,7 @@ class FakeSMTP:
 def box(tmp_path, monkeypatch):
     """A fake home: an env file with the password, an empty send log, no real SMTP and no real sleeping."""
     env = tmp_path / "env"
-    env.write_text(f"SMTP_PASSWORD='{PASSWORD}'\n")
+    env.write_text(f"MAIL_PASSWORD='{PASSWORD}'\n")
     monkeypatch.setattr(sm, "ENV_FILE", str(env))
     monkeypatch.setattr(sm, "SENT_FILE", str(tmp_path / "sent"))
     monkeypatch.setattr(smtplib, "SMTP_SSL", FakeSMTP)
@@ -166,5 +166,5 @@ def test_missing_password_fails_loudly(box, monkeypatch):
 
 def test_quotes_that_are_part_of_the_password_are_kept(box):
     home, _ = box
-    (home / "env").write_text("""SMTP_PASSWORD='"quoted"'\n""")
-    assert sm.load_env() == {"SMTP_PASSWORD": '"quoted"'}
+    (home / "env").write_text("""MAIL_PASSWORD='"quoted"'\n""")
+    assert sm.load_env() == {"MAIL_PASSWORD": '"quoted"'}
