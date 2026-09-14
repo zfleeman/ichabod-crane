@@ -62,7 +62,7 @@ email ──> receive-mail (Python) ──> pi, with no tools ──> JSON on st
 
 ### Step 1 — Fetch
 
-`receive-mail` is a Python script on a cron timer. It opens the mailbox with `imaplib`, takes one unread message, and gates it before anything reads the body. The rules, in order:
+`receive-mail` is a Python script on a cron timer. It opens the mailbox with `imaplib` and works through the unread messages, gating each one before anything reads its body. It stops after a fixed number of reader calls, set in the script, so a backlog cannot use up the ChatGPT quota the passes share; the next run picks up the rest. The rules, in order:
 
 1. Exactly one `From` header carrying exactly one address. This stops header stuffing.
 2. The address is on the allowlist, which is Zach's address and nothing else. Display names and `Reply-To` grant nothing.

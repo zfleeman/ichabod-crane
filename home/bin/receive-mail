@@ -46,6 +46,8 @@ READER = [
     f"@{HOME}/prompts/membrane.md",
 ]  # fmt: skip
 READER_TIMEOUT_SECONDS = 600
+# Stop after this many reader calls in one run, so a backlog cannot drain the Plus quota the passes share.
+MAX_READS_PER_RUN = 10
 
 # The reader's whole contract: these four fields, these types, nothing else. Never add a field that
 # names an agent, a command, a schedule, a URL or a budget (MEMBRANE.md, "Rules").
@@ -233,7 +235,7 @@ def header_text(msg, name, limit=200):
 
 
 def process(imap, uid, uidvalidity, seen_uids, seen_message_ids):
-    """Handle one unread message. Returns True if the reader was called, so the run stops there."""
+    """Handle one unread message. Returns True if the reader was called, which counts toward MAX_READS_PER_RUN."""
     _, date_data = imap.uid("FETCH", uid, "(INTERNALDATE)")
     received_at = time.mktime(imaplib.Internaldate2tuple(date_data[0]))
     _, body_data = imap.uid("FETCH", uid, "(BODY.PEEK[])")
@@ -246,6 +248,10 @@ def process(imap, uid, uidvalidity, seen_uids, seen_message_ids):
         imap.uid("STORE", uid, "+FLAGS", "(\\Seen)")
         log(uid, "skipped", "already processed")
         return False
+    # Claimed in memory now, so a second copy of the same Message-ID later in this run is skipped too.
+    seen_uids.add((uidvalidity, int(uid)))
+    if message_id:
+        seen_message_ids.add(message_id)
 
     reason = gate(msg, raw, received_at)
     if reason:
@@ -311,9 +317,13 @@ def main():
         uidvalidity = int(imap.response("UIDVALIDITY")[1][0])
         _, data = imap.uid("SEARCH", "UNSEEN")
         seen_uids, seen_message_ids = read_state()
+        reads = 0
         for uid in data[0].split():
-            if process(imap, uid.decode(), uidvalidity, seen_uids, seen_message_ids):
+            if reads == MAX_READS_PER_RUN:
+                log("-", "stopped", f"reader called {MAX_READS_PER_RUN} times; the rest wait for the next run")
                 break
+            if process(imap, uid.decode(), uidvalidity, seen_uids, seen_message_ids):
+                reads += 1
     finally:
         imap.logout()
     return 0

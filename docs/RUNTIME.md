@@ -157,7 +157,7 @@ MCP tool schemas are exactly the preamble tax Pi was chosen to remove: a schema 
 
 ## Mail
 
-**In:** `receive-mail` fetches one message, gates it, hands the body to a Pi with no tools, validates the four fields it prints, writes the card itself, and moves the message to `Archive`. That path is the only safety-critical one on the box, and [MEMBRANE.md](MEMBRANE.md) is its specification.
+**In:** `receive-mail` works through unread mail. For each message it gates it, hands the body to a Pi with no tools, validates the four fields it prints, writes the card itself, and moves the message to `Archive`. That path is the only safety-critical one on the box, and [MEMBRANE.md](MEMBRANE.md) is its specification.
 
 **Out:** `send-mail [--in-reply-to <message-id>] <subject>`, with the body on stdin, is a short Python `smtplib` script with these rules, enforced in code:
 
