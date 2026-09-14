@@ -72,6 +72,17 @@ start: ## Start the instance and wait until SSM answers
 	  done; \
 	  echo "SSM never came online; check the console in the EC2 web UI." >&2; exit 1
 
+# Ships the committed home/ to /home/ichabod. Refuses when Ichabod changed a shipped file on the
+# box since the last deploy; FORCE=1 overwrites. scripts/install-home has the rules.
+deploy: ## Install the committed home/ on the box (FORCE=1 overwrites drift)
+	FORCE=$(or $(FORCE),0) scripts/deploy
+
+# Separate from deploy on purpose: a deploy must never re-enable passes a kill switch turned off.
+cron: ## Install home/crontab as the live schedule, /etc/cron.d/ichabod
+	aws ssm start-session --target $(INSTANCE_ID) \
+	  --document-name AWS-StartInteractiveCommand \
+	  --parameters command="sudo install -o root -g root -m 0644 /home/ichabod/crontab /etc/cron.d/ichabod && cat /etc/cron.d/ichabod"
+
 # The value is typed into the session with echo off, so it never lands on a command line, in shell
 # history, or in SSM's command history. Only the name travels as a parameter.
 secret: ## Set one secret on the box: make secret NAME=KANBOARD_TOKEN
@@ -87,4 +98,4 @@ alarms: ## Current state of every ichabod alarm
 	aws cloudwatch describe-alarms --alarm-name-prefix ichabod- \
 	  --query 'MetricAlarms[].[AlarmName,StateValue]' --output table
 
-.PHONY: help init check plan apply shell status stop start secret ip alarms
+.PHONY: help init check plan apply shell status stop start deploy cron secret ip alarms

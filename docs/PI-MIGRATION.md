@@ -64,7 +64,7 @@ One box, one Unix user, six scripts, one crontab. The repo's [`home/`](../home) 
 
 `ichabod` runs every pass, every worker, and the membrane wrapper, and holds Docker, `gh`, the ChatGPT login and the mailbox. The membrane runs as `ichabod` rather than as a user of its own — see [MEMBRANE.md](MEMBRANE.md#what-we-deliberately-gave-up) for what that costs and how the isolation is kept anyway.
 
-The schedule is [`home/crontab`](../home/crontab).
+The schedule is [`home/crontab`](../home/crontab), installed as `/etc/cron.d/ichabod` by `make cron`. It is kept out of `make deploy` so a deploy never re-enables passes a kill switch stopped, and it lives in `/etc/cron.d` so Ichabod's own crontab stays his.
 
 [`run-pass`](../home/bin/run-pass) is the whole harness. `flock -n` is the concurrency rule that `--max-starts 1` enforces today: if the previous run is still going, this one exits rather than stacking. `timeout` is the stall recovery that "a `running` card that has not moved in over an hour is stuck" currently handles by hand. `rc` is captured rather than allowed to abort under `set -e`, because a failed pass still has a log worth summarising. Pi has no working-directory flag, so the script `cd`s into `workspace/` for Pi to find `AGENTS.md`.
 
@@ -191,14 +191,14 @@ On the new instance, in rough order:
 - [ ] **Prove Pi.** Install `pi` as `ichabod`. Settle the run-mode flags and read one real `--mode json` stream for the actual `usage` field names. Run `scout.md` by hand and measure the preamble off the first usage event.
 - [ ] **Settle the allowance.** Log in to Ichabod's ChatGPT Plus account (`ichabod@ichabod-crane.net`) on the box with Pi's device code login, and pick the models. Prove `usage` works headless. Run the crontab for a day, then a day with dispatched workers, and check whether either hits the 5-hour or weekly limit — a pass is light, **workers on the strongest model are not**, and they are where the usage lives.
 - [ ] **The board.** Kanboard on the Synology at `ichabod-board.zfleeman.com`, with an `ichabod` user and its personal API token as `KANBOARD_TOKEN`, two-factor authentication on Zach's admin account, and columns triage, backlog, ready, running, review, blocked, done. `board` written, and `board createTask` works from inside Pi's `bash`. A nightly `board getAllTasks` dump committed into the workspace repo.
-- [ ] **`make deploy`**, copying `home/` onto the box. Before overwriting, it checks the box against the checksums the last deploy left and stops with a list if anything changed, so a hand edit is pulled into the repo or overwritten on purpose, never lost silently. Zach's files land owned by root and read-only to `ichabod`, which turns an edit into an error that points him at a pull request. `USER.md` and `MEMORY.md` are written only if missing, and `memory/` and `own-skills/` are never touched. The old deploy's trick still works — SSM has no file copy, so ship a base64 tarball inside a run-command, built with `COPYFILE_DISABLE=1 tar --no-xattrs` so macOS metadata files stay out. `git show d005f4a:scripts/deploy-workspace` has it.
+- [ ] **Deploy.** Run `make deploy` on the new box, then again to confirm the second run changes nothing. [`scripts/install-home`](../scripts/install-home) holds the rules: shipped files owned by root and read-only to `ichabod`, drift since the last deploy refused unless `FORCE=1`, `USER.md` and `MEMORY.md` seeded once, `memory/` and `own-skills/` never touched.
 - [ ] **`notify`,** proven by a real email arriving with the right envelope sender.
 - [ ] **Prompts.** `scout.md` and `digest.md` are ported to `board`; check their calls against the real board. Rewrite `director.md` into `route.md` against `board` — the projection one-liner and the twin-card retirement both disappear, since Kanboard returns small results and tasks can be edited in place. Write `work.md`: take the top `ready` task, do it, comment what happened, move the column. Reasoning goes on the card as a comment, so most of `memory/YYYY-MM-DD/` stops existing.
 - [ ] **The membrane.** `intake` and `membrane.md` built to [MEMBRANE.md](MEMBRANE.md), and all four of [its tests](MEMBRANE.md#how-to-test-it) passing — injection, credentials, malformed output, and a normal request. Not three.
 - [ ] **Workspace backup.** `workspace/` is a git repository pushed to a private `ich4bod` repository. [`backup-workspace`](../home/bin/backup-workspace) runs after every pass and refuses to commit if a staged change contains any token or password from the env file or Pi's login.
 - [ ] **`health`,** and a check that it shouts when a pass has not succeeded.
 - [ ] **`home/workspace/AGENTS.md`** finished against the real stack, including the journal rules the board made obsolete.
-- [ ] **End to end.** Install the crontab, email Ichabod a small request, and watch it go from intake to a reply.
+- [ ] **End to end.** `make cron`, email Ichabod a small request, and watch it go from intake to a reply.
 
 `zf/pi-migration` merges to `main` once that last box is ticked.
 

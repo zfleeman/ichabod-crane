@@ -1,7 +1,11 @@
-# ichabod's crontab. intake and health are not written yet; their lines fail until they are.
-*/5  * * * *     /home/ichabod/bin/intake
-*/15 * * * *     /home/ichabod/bin/usage >> /home/ichabod/log/usage.jsonl
-*/15 * * * *     /home/ichabod/bin/run-pass route
-*/15 * * * *     /home/ichabod/bin/run-pass work
-0 4,11,18 * * *  /home/ichabod/bin/run-pass scout
-0 7  * * *       /home/ichabod/bin/run-pass digest
+# The shipped schedule. `make cron` installs it as /etc/cron.d/ichabod; `make deploy` never does.
+# Ichabod's own crontab (`crontab -l` as ichabod) is separate and his to edit.
+# intake and health are not written yet; their lines fail until they are.
+PATH=/home/ichabod/.local/bin:/usr/local/bin:/usr/bin:/bin
+
+*/5  * * * *     ichabod  /home/ichabod/bin/intake
+*/15 * * * *     ichabod  /home/ichabod/bin/usage >> /home/ichabod/log/usage.jsonl
+*/15 * * * *     ichabod  /home/ichabod/bin/run-pass route
+*/15 * * * *     ichabod  /home/ichabod/bin/run-pass work
+0 4,11,18 * * *  ichabod  /home/ichabod/bin/run-pass scout
+0 7  * * *       ichabod  /home/ichabod/bin/run-pass digest

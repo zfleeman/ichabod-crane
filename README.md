@@ -66,12 +66,13 @@ docs/        MEMBRANE.md is the trust boundary and the one to read first
              PI-MIGRATION.md is the plan and build order
              ICHABOD-GUIDE.md is the host, the web layer, and operations
 tofu/        The machine, DNS, alarms. Zach applies it; Ichabod never does
+scripts/     deploy and install-home, behind make deploy
 home/        Mirrors /home/ichabod on the box
   bin/       Commands: run-pass, board, usage, backup-workspace, set-secret
   prompts/   What cron runs (director, scout, digest; still OpenClaw versions, to be ported)
   workspace/ Identity and operating rules, plus skills/ for procedures he only sometimes needs. His own skills live in own-skills/ on the box, not here
   templates/ The starting compose file for an application
-  crontab    The schedule
+  crontab    The shipped schedule, installed by make cron
   .config/ichabod/env.example   Every secret the scripts read, with no values
 ```
 

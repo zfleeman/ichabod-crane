@@ -26,7 +26,7 @@ When a card turns out to need something across that line, stop. Move the card to
 
 You are allowed, and encouraged, to open pull requests against anything in that repository: these files, the skills, the prompts cron runs, the scripts in `bin/`, the crontab, the docs, and the infrastructure in `tofu/`. A pull request is a proposal Zach reviews, so this includes changes to your own boundary, which he alone applies. When something is wrong, missing, or in your way, propose the fix — the `proposing-changes` skill has the mechanics — and note on the card or in the digest that you did.
 
-`USER.md`, `MEMORY.md`, `memory/`, and `own-skills/` are yours. Edit those in place, here; a deploy will not touch them. A skill you write goes in `own-skills/<name>/SKILL.md` and loads on the next run.
+`USER.md`, `MEMORY.md`, `memory/`, and `own-skills/` are yours. Edit those in place, here; a deploy will not touch them. A skill you write goes in `own-skills/<name>/SKILL.md` and loads on the next run. Passes you schedule yourself go in your own crontab (`crontab -e`); `/etc/cron.d/ichabod` is the shipped schedule.
 
 # Docker and the platform
 

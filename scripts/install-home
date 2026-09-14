@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# install-home <commit>   runs on the box as root, unpacked from the payload scripts/deploy sends.
+#
+# Zach's files (everything in home/ except the seed-once files) are installed owned by root and
+# read-only to ichabod. Before overwriting, the box is checked against the last deploy's checksums,
+# and a change Ichabod made is refused rather than silently lost; FORCE=1 overwrites it.
+# Ichabod's files are seeded once, and memory/ and own-skills/ are never touched.
+set -euo pipefail
+
+src="$(cd "$(dirname "$0")/../home" && pwd)"
+dst=/home/ichabod
+state=/var/lib/ichabod-deploy
+manifest="$state/manifest.sha256"
+commit="${1:-unknown}"
+
+# Seeded on the first deploy, then Ichabod's to edit. Never in the manifest.
+seed_once=(workspace/USER.md workspace/MEMORY.md)
+
+id ichabod >/dev/null 2>&1 || { echo "no ichabod user; build the host first (docs/ICHABOD-GUIDE.md, section 5)" >&2; exit 1; }
+install -d -o root -g root -m 0700 "$state"
+
+# 1. Refuse drift. sha256sum reports every file whose content changed or that went missing.
+if [ -f "$manifest" ] && ! drift="$(sha256sum -c --quiet "$manifest" 2>&1)"; then
+  if [ "${FORCE:-0}" != 1 ]; then
+    echo "Refusing to deploy: these files changed on the box since the last deploy ($(cat "$state/commit")):" >&2
+    echo "$drift" >&2
+    echo "Pull the change into the repo, or overwrite it with: make deploy FORCE=1" >&2
+    exit 1
+  fi
+  echo "FORCE=1, overwriting:"
+  echo "$drift"
+fi
+
+# 2. Directories Ichabod writes into. Created if missing and never re-owned, so an existing mode stays.
+for d in workspace workspace/memory workspace/own-skills .config .local .local/state log; do
+  [ -d "$dst/$d" ] || install -d -o ichabod -g ichabod -m 0755 "$dst/$d"
+done
+[ -d "$dst/.config/ichabod" ] || install -d -o ichabod -g ichabod -m 0700 "$dst/.config/ichabod"
+
+# 3. Zach's files. Any directory this creates is root-owned, so Ichabod cannot add or remove files in it.
+files="$(cd "$src" && find . -type f | sed 's|^\./||' | sort)"
+new_manifest="$(mktemp)"
+while IFS= read -r rel; do
+  case " ${seed_once[*]} " in *" $rel "*) continue ;; esac
+  [ -d "$dst/$(dirname "$rel")" ] || install -d -o root -g root -m 0755 "$dst/$(dirname "$rel")"
+  mode=0644
+  [ -x "$src/$rel" ] && mode=0755
+  if [ ! -e "$dst/$rel" ]; then
+    echo "added    $rel"
+  elif ! cmp -s "$src/$rel" "$dst/$rel"; then
+    echo "updated  $rel"
+  fi
+  install -o root -g root -m "$mode" "$src/$rel" "$dst/$rel"
+  sha256sum "$dst/$rel" >> "$new_manifest"
+done <<< "$files"
+
+# 4. Files an earlier deploy installed that the repo no longer has.
+if [ -f "$manifest" ]; then
+  while IFS= read -r path; do
+    grep -qxF "$dst/$path" <(sed 's/^[0-9a-f]*  //' "$new_manifest") && continue
+    rm -f "$dst/$path"
+    echo "removed  $path"
+  done < <(sed "s|^[0-9a-f]*  $dst/||" "$manifest")
+fi
+
+# 5. Ichabod's files, seeded once.
+for rel in "${seed_once[@]}"; do
+  if [ -e "$dst/$rel" ]; then
+    echo "kept     $rel (Ichabod's)"
+  else
+    install -o ichabod -g ichabod -m 0644 "$src/$rel" "$dst/$rel"
+    echo "seeded   $rel"
+  fi
+done
+
+install -o root -g root -m 0644 "$new_manifest" "$manifest"
+rm -f "$new_manifest"
+echo "$commit" > "$state/commit"
+
+# The live schedule is make cron's job, so a deploy never re-enables passes a kill switch stopped.
+if ! cmp -s "$dst/crontab" /etc/cron.d/ichabod 2>/dev/null; then
+  echo "note: home/crontab differs from the live /etc/cron.d/ichabod; make cron installs it"
+fi
+echo "deployed $commit"

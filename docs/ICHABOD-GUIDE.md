@@ -55,7 +55,7 @@ Passwords and recovery codes live in Zach's password manager, never on the insta
 
 **Secrets.** Not AWS Secrets Manager. A root-equivalent agent with a role that can fetch a secret can fetch it anyway, so it would improve rotation, not isolation. Secrets live in one file, `/home/ichabod/.config/ichabod/env`, mode 0600, and [`env.example`](../home/.config/ichabod/env.example) lists every name it needs.
 
-Set each one from the laptop, after `home/` has been deployed:
+Set each one from the laptop, after the first `make deploy`:
 
 ```bash
 make secret NAME=KANBOARD_TOKEN
@@ -226,7 +226,7 @@ One layer at a time, with a current backup, the old version recorded and the rel
 
 Least to most severe:
 
-1. Comment out the crontab lines — intake first, then the passes.
+1. Stop the schedule: `sudo rm /etc/cron.d/ichabod`, and `sudo crontab -u ichabod -r` for any passes Ichabod scheduled himself. `make deploy` never reinstalls it; only `make cron` does.
 2. Revoke the mailbox app passwords and the GitHub token, and sign the box out of ChatGPT.
 3. `docker compose down` in one application's directory.
 4. `make stop`.
