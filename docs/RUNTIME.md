@@ -180,7 +180,7 @@ MCP tool schemas are exactly the preamble tax Pi was chosen to remove: a schema 
 
 ## Open actions
 
-What stands between the repository and the state described above. Tick them off by deleting them. Decisions that need Zach are GitHub issues, linked from the item they block. [#70](https://github.com/zfleeman/ichabod-crane/issues/70) decides when this list moves into issues.
+What stands between the repository and the state described above. Tick them off by deleting them. Decisions that need Zach are GitHub issues, linked from the item they block. The list stays here until the pull request that moves Ichabod onto Pi merges, because until then it is the cutover plan; its last item moves what is left into issues.
 
 ### Rebuild the box
 
@@ -211,6 +211,7 @@ What stands between the repository and the state described above. Tick them off 
 - [ ] **Rehearse recovery.** Restore one application backup into a disposable instance, and have Zach run every kill switch in [the guide](ICHABOD-GUIDE.md#kill-switches) in order rather than trusting that it is written down.
 - [ ] **EBS snapshots.** Add a lifecycle policy to `tofu/`; the guide relies on one and none exists yet.
 - [ ] **Session Manager logging.** Decide whether to log sessions to S3 or CloudWatch Logs so administrative access is auditable, and add it to `tofu/` if so.
+- [ ] **Move this list into issues.** Once the migration pull request merges, file an issue for each item still open here, and delete this section.
 
 ### Things to figure out
 
