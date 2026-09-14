@@ -70,7 +70,7 @@ docs/        MEMBRANE.md is the trust boundary and the one to read first
 tofu/        The machine, DNS, alarms. Zach applies it; Ichabod never does
 scripts/     deploy and install-home, behind make deploy
 home/        Mirrors /home/ichabod on the box
-  bin/       Commands: run-pass, board, usage, backup-workspace, set-secret
+  bin/       Commands: run-pass, board, intake, usage, backup-workspace, set-secret
   prompts/   What cron runs, one file per pass
   workspace/ Identity and operating rules, plus skills/ for procedures he only sometimes needs. His own skills live in own-skills/ on the box, not here
   templates/ The starting compose file for an application

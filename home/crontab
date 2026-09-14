@@ -1,9 +1,9 @@
 # The shipped schedule. `make cron` installs it as /etc/cron.d/ichabod-schedule; `make deploy` never does.
 # Ichabod's own crontab (`crontab -l` as ichabod) is separate and his to edit.
-# intake and health are not written yet; their lines fail until they are.
+# intake stays commented out until the four tests in docs/MEMBRANE.md pass.
 PATH=/home/ichabod/.local/bin:/usr/local/bin:/usr/bin:/bin
 
-*/5  * * * *     ichabod  /home/ichabod/bin/intake
+# */5  * * * *   ichabod  /home/ichabod/bin/intake >> /home/ichabod/log/intake.log 2>&1
 */15 * * * *     ichabod  /home/ichabod/bin/usage >> /home/ichabod/log/usage.jsonl
 */15 * * * *     ichabod  /home/ichabod/bin/run-pass route
 */15 * * * *     ichabod  /home/ichabod/bin/run-pass work

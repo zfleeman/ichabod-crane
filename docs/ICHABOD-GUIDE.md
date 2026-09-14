@@ -86,7 +86,7 @@ Gotchas that look like failures and are not:
 
 Everything below runs from `make shell`, which lands as `ssm-user` with passwordless sudo. There is no `ubuntu` user in this workflow; that is Canonical's SSH login and is vestigial here. The account that matters is `ichabod`, which owns everything the agent does.
 
-1. `apt-get update && apt-get upgrade -y`, install `ca-certificates curl git jq unzip build-essential`, reboot.
+1. `apt-get update && apt-get upgrade -y`, install `ca-certificates curl git jq unzip build-essential python3-dkim python3-dnspython`, reboot.
 2. `useradd --create-home --shell /bin/bash ichabod`. Name the shell: `useradd` defaults to `/bin/sh`, which is dash on Ubuntu, and a dash login shell never reads `~/.bashrc`, so installer `PATH` lines silently never load.
 3. Create `apps`, `platform`, `backups` and `src` under `/home/ichabod`, owned by `ichabod`.
 4. A 4 GiB swap file in `/etc/fstab`. It is an OOM fuse, not working memory.
