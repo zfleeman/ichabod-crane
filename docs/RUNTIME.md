@@ -157,12 +157,13 @@ What stands between the repository and the state described above. Tick them off 
 - [ ] **Check `scout.md` and `digest.md`** against the real board.
 - [ ] **Build the membrane.** `intake` and `membrane.md` to [MEMBRANE.md](MEMBRANE.md), with its own `intake.lock` so a slow membrane call cannot overlap the next run and take the same message twice. All four of [its tests](MEMBRANE.md#how-to-test-it) pass before intake runs from cron.
 - [ ] **Make the workspace backup real.** Create the private `ich4bod` repository and initialise `workspace/` against it.
+- [ ] **Clone the fork.** `ich4bod/ichabod-crane` into `src/ichabod-crane`, with `upstream` pointing at `zfleeman/ichabod-crane`, as the `proposing-changes` skill expects.
 - [ ] **Write `health`,** and prove it shouts when a pass has not succeeded.
 - [ ] **Finish `AGENTS.md` against the real stack.** Its memory section still describes a per-pass journal the board makes mostly unnecessary.
 
 ### Prove it
 
-- [ ] **End to end.** `make cron`, email Ichabod a small website idea, and receive a working HTTPS link, a short explanation, source history and test evidence without opening a session. Scheduled work survives a host reboot.
+- [ ] **End to end.** `make cron`, then pass [the acceptance test](ICHABOD-GUIDE.md#touchpoints) with a small website idea. Scheduled work survives a host reboot.
 - [ ] **Rehearse recovery.** Restore one application backup into a disposable instance, and have Zach run every kill switch in [the guide](ICHABOD-GUIDE.md#kill-switches) in order rather than trusting that it is written down.
 - [ ] **EBS snapshots.** Add a lifecycle policy to `tofu/`; the guide relies on one and none exists yet.
 - [ ] **Session Manager logging.** Decide whether to log sessions to S3 or CloudWatch Logs so administrative access is auditable, and add it to `tofu/` if so.

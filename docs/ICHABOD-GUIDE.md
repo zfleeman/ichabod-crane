@@ -16,7 +16,7 @@ Ichabod may, without asking: create and delete files under its work and applicat
 
 ## Kept outside the box
 
-Ichabod does not receive Zach's personal email, GitHub, Claude or password-manager credentials; AWS administrator credentials or permission to run OpenTofu; a broad instance role; access to other networks or machines; or payment cards and authority to enter contracts.
+Ichabod does not receive Zach's personal email, GitHub, ChatGPT or any other personal credentials; AWS administrator credentials or permission to run OpenTofu; a broad instance role; access to other networks or machines; or payment cards and authority to enter contracts.
 
 It also may not **widen its own trust boundary** — the sender allowlist, the membrane, or anything else that changes who may instruct it. Everything else it is trusted with affects what it *does*; those change who may *tell it what to do*. An agent that can extend its own boundary has none, and the failure does not need to be malicious: a plausible email asking to add a collaborator is enough. Ichabod may draft such a change and explain it. Zach applies it.
 
@@ -45,13 +45,13 @@ Resize only on evidence: memory repeatedly above 85%, swap during ordinary work,
 | Email | `ichabod@ichabod-crane.net` on Fastmail |
 | Model provider | ChatGPT Plus on `ichabod@ichabod-crane.net`, logged in with Pi. Ichabod's own account, not Zach's |
 
-Passwords and recovery codes live in Zach's password manager, never on the instance.
+Account passwords and recovery codes never go on the instance; only the tokens listed under Secrets below do.
 
-**GitHub.** The SSH key is generated on the box so the private half never travels, and it is an account-level key on the bot account, because Ichabod creates repositories itself and a deploy key would need adding to each. `gh` is authenticated separately with a fine-grained token scoped to the bot account.
+**GitHub.** The SSH key is generated on the box so the private half never travels, and it is an account-level key on the bot account, because Ichabod creates repositories itself and a deploy key would need adding to each. `gh` is authenticated separately with a fine-grained token scoped to the bot account, set as `GH_TOKEN`, which `gh` reads from the environment.
 
-**Domain.** Route 53 is authoritative for `ichabod-crane.net`, web and mail records both. An apex and a wildcard A record point at the Elastic IP; the wildcard does not answer for the apex, so both exist.
+**Domain.** Route 53 is authoritative for `ichabod-crane.net`, web and mail records both. An apex and a wildcard A record point at the Elastic IP; the wildcard does not answer for the apex, so both exist. The board's `ichabod-board.zfleeman.com` record is in `tofu/` too, and points at Zach's Synology rather than the box.
 
-**Email.** A paid mailbox with a custom domain, real IMAP, real SMTP and app passwords. Fastmail Standard is the floor there, since Basic has no third-party IMAP. App passwords rather than OAuth: scoped to mail, revocable on their own, and they do not expire mid-week. DKIM is the provider's job — mail leaves through its SMTP and is signed on the way out, so nothing on the box holds a signing key. Do not self-host mail to save a few dollars; deliverability is a separate project.
+**Email.** A paid mailbox with a custom domain, real IMAP, real SMTP and app passwords. Fastmail Standard is the floor there, since Basic has no third-party IMAP. App passwords rather than OAuth: scoped to mail, revocable on their own, and they do not expire mid-week. There are two, one for `intake` to read and one for `notify` to send, so sending can be revoked without breaking intake. DKIM is the provider's job — mail leaves through its SMTP and is signed on the way out, so nothing on the box holds a signing key. Do not self-host mail to save a few dollars; deliverability is a separate project.
 
 **Secrets.** Not AWS Secrets Manager. A root-equivalent agent with a role that can fetch a secret can fetch it anyway, so it would improve rotation, not isolation. Secrets live in one file, `/home/ichabod/.config/ichabod/env`, mode 0600, and [`env.example`](../home/.config/ichabod/env.example) lists every name it needs.
 
@@ -72,6 +72,7 @@ The ChatGPT login is the one secret not in that file. Log in once with `make she
 - **The default VPC.** It already has a public subnet, an Internet gateway and a route. The parts of AWS networking that cost money — NAT gateways, VPC endpoints — are exactly the parts a box that needs outbound Internet and inbound 80/443 does not need.
 - **No port 22, ever.** Administration is SSM, which rides the instance's outbound connection, so access is an IAM question rather than a firewall one and works from any network.
 - **One IAM role, and it is safe to hold.** `AmazonSSMManagedInstanceCore` lets the instance be managed by SSM and grants nothing else in the account. `CloudWatchAgentServerPolicy` sits beside it so the host can publish memory and disk. Nothing else goes on it.
+- **Instance metadata needs a token and stops at one hop.** IMDSv2 with a hop limit of 1 means a container on Docker's bridge network cannot reach the metadata service or the role's credentials.
 - **The AMI is pinned by hand.** A `most_recent` lookup would silently replace the instance on a later apply.
 
 Gotchas that look like failures and are not:
@@ -87,7 +88,7 @@ Everything below runs from `make shell`, which lands as `ssm-user` with password
 
 1. `apt-get update && apt-get upgrade -y`, install `ca-certificates curl git jq unzip build-essential`, reboot.
 2. `useradd --create-home --shell /bin/bash ichabod`. Name the shell: `useradd` defaults to `/bin/sh`, which is dash on Ubuntu, and a dash login shell never reads `~/.bashrc`, so installer `PATH` lines silently never load.
-3. Create `apps`, `platform` and `backups` under `/home/ichabod`.
+3. Create `apps`, `platform`, `backups` and `src` under `/home/ichabod`, owned by `ichabod`.
 4. A 4 GiB swap file in `/etc/fstab`. It is an OOM fuse, not working memory.
 5. `systemctl disable --now ssh ssh.socket`. Both units: on 24.04 sshd is socket-activated, so disabling only the service leaves port 22 listening. `ss -lntp` showing nothing on 22 is the check that settles it.
 6. Install the CloudWatch agent. Its config lives at `/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json`, collects only `/`, and sets `aggregation_dimensions` to `InstanceId`. Both details are load-bearing: the alarms have `InstanceId` as their only dimension, and the default per-filesystem metrics also carry `path`, `device` and `fstype`, which never match.
@@ -98,6 +99,10 @@ Everything below runs from `make shell`, which lands as `ssm-user` with password
    ```
 
    `docker run --rm hello-world` as `ichabod` is not a formality; it confirms the intended root-equivalent authority. `ssm-user` reaches Docker only through sudo and should stay that way.
+8. Install the GitHub CLI from [GitHub's apt repository](https://github.com/cli/cli/blob/trunk/docs/install_linux.md); Ubuntu's own package lags well behind.
+9. As `ichabod`, generate an SSH key with `ssh-keygen -t ed25519` and add the public half to `ich4bod` as an account key. Set `git config --global user.name` and `user.email` to Ichabod's.
+
+Then, from the laptop, `make deploy` and `make secret` for each name in [`env.example`](../home/.config/ichabod/env.example). [RUNTIME.md](RUNTIME.md) covers everything after that.
 
 ## Where things live
 
@@ -106,6 +111,7 @@ Everything below runs from `make shell`, which lands as `ssm-user` with password
 | `/home/ichabod/apps/<slug>/` | One directory per application: source, Dockerfile, `compose.yaml`, its own `.git` | GitHub for source, the app's own backup for data |
 | `/home/ichabod/platform/` | Traefik and other host-owned compose projects | Git |
 | `/home/ichabod/backups/` | Staging before a backup leaves the box | Copied off-host |
+| `/home/ichabod/src/` | Ichabod's checkouts of repositories he proposes changes to, such as his fork of `ichabod-crane` | GitHub |
 | `/var/lib/docker/` | Images, layers, build cache, named volumes | Volume by volume, never wholesale |
 
 The runtime's own directories are laid out in [RUNTIME.md](RUNTIME.md#layout). `/var/lib/docker` is what fills the disk; `docker system df` is the thing to watch.
@@ -178,7 +184,7 @@ Back up the `ichabod-proxy_letsencrypt` volume or expect to re-issue after a reb
 
 ## The application contract
 
-[`home/templates/app/compose.yaml`](../home/templates/app/compose.yaml) is the starting point and already carries the shape. An application builds reproducibly from its repository, listens on `0.0.0.0` inside the container, publishes no host port, joins the external `ichabod-proxy` network, sets an explicit `Host()` rule, has a health check it can actually fail, and sets restart, CPU, memory, PID and log limits. The `cpus: "0.50"` / `mem_limit: 512m` defaults are a blast radius, not a budget, and are raised from a measured peak, never an estimate. Those limits are the only capacity ceiling on the box that Docker enforces rather than the agent remembering.
+[`home/templates/app/compose.yaml`](../home/templates/app/compose.yaml) is the starting point and already carries the shape. An application builds reproducibly from its repository, listens on `0.0.0.0` inside the container, publishes no host port, joins the external `ichabod-proxy` network, sets an explicit `Host()` rule, has a health check it can actually fail, and sets restart, CPU, memory, PID and log limits. The template's CPU and memory defaults are a blast radius, not a budget, and are raised from a measured peak, never an estimate. Those limits are the only capacity ceiling on the box that Docker enforces rather than the agent remembering.
 
 The deploy sequence:
 
@@ -205,7 +211,7 @@ Housekeeping: roughly five running experiments at most, one active heavy build, 
 |---|---|
 | Whenever | Email Ichabod |
 | Weekly | Finished and blocked work, self-directed work, disk (`docker system df`), running services |
-| Monthly | AWS cost, model spend, updates, backups, stale applications |
+| Monthly | AWS cost, ChatGPT usage against its limits, updates, backups, stale applications |
 | Rarely | `make shell` for upgrades, credentials, recovery, or resizing |
 
 The acceptance test for the whole system is one sentence: email Ichabod a small website idea, and later receive a working HTTPS link, a short explanation, source history and test evidence, with no infrastructure surprise and no session opened.
@@ -213,21 +219,22 @@ The acceptance test for the whole system is one sentence: email Ichabod a small 
 ## Backups
 
 1. **GitHub** — source for every valuable project.
-2. **Application-native** — dumps or volume archives, per the app's README.
-3. **EBS snapshots** — whole-machine recovery, on a lifecycle policy owned by Zach's AWS account and never touched from the box.
+2. **The workspace** — `backup-workspace` pushes `workspace/` to a private `ich4bod` repository after every pass, including a nightly dump of the board. Kanboard's own data lives on the Synology, off the box.
+3. **Application-native** — dumps or volume archives, per the app's README.
+4. **EBS snapshots** — whole-machine recovery, on a lifecycle policy owned by Zach's AWS account and never touched from the box.
 
 A backup stored only on the failed volume is not a recovery plan, and an untested restore is a hypothesis. Restore one into a disposable instance at least once.
 
 ## Updates
 
-One layer at a time, with a current backup, the old version recorded and the release notes read. Afterwards recheck Docker, Traefik, the agent's passes, and one public site. Pin Traefik and base images. Ichabod may update its own projects' dependencies; Docker, Traefik, the SSM agent and the harness are workshop machinery that Zach updates deliberately.
+One layer at a time, with a current backup, the old version recorded and the release notes read. Afterwards recheck Docker, Traefik, the agent's passes, and one public site. Pin Traefik and base images. Ichabod may update its own projects' dependencies; Docker, Traefik, the SSM agent and Pi are workshop machinery that Zach updates deliberately.
 
 ## Kill switches
 
 Least to most severe:
 
 1. Stop the schedule: `sudo rm /etc/cron.d/ichabod-schedule`, and `sudo crontab -u ichabod -r` for any passes Ichabod scheduled himself. `make deploy` never reinstalls it; only `make cron` does.
-2. Revoke the mailbox app passwords and the GitHub token, and sign the box out of ChatGPT.
+2. Revoke the mailbox app passwords, the GitHub token and the `ichabod` Kanboard user's token, and sign the box out of ChatGPT.
 3. `docker compose down` in one application's directory.
 4. `make stop`.
 5. If compromise is suspected: remove public ingress, revoke credentials, snapshot the disk, and investigate a copy.
@@ -245,6 +252,8 @@ Stopping EC2 does not stop EBS, Elastic IP, domain or snapshot charges.
 | Container unhealthy | Bind address, internal port, health command, logs, OOM |
 | Host is slow | `free -h`, swap, CPU credit balance, concurrent builds, container limits |
 | Disk fills | `docker system df`, logs, build cache, old images. Preserve volumes |
+| A pass did not run | `/etc/cron.d/ichabod-schedule` exists, today's `log/` directory, a lock left in `.local/state/`, `log/usage.jsonl` for a hit limit |
+| An email made no card | Sender allowlist, DMARC result, the quarantine folder |
 
 # 9. References
 
