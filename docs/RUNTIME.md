@@ -186,9 +186,8 @@ What stands between the repository and the state described above. Tick them off 
 
 - [ ] **Revoke what the previous box held.** The mailbox app password, the `gh` token, the OpenAI API key, and the old SSH key on the `ich4bod` account. Those values sat on a box that read untrusted mail, so issue fresh ones rather than reusing them. The OpenAI key is not replaced; the subscription covers models.
 - [ ] **Replace the instance.** In `tofu/main.tf` set `disable_api_termination = false` and apply, refresh `ami_id` in `terraform.tfvars`, then `tofu -chdir=tofu apply -replace=aws_instance.ichabod`. Set termination protection back to `true` and apply again. The Elastic IP, DNS, alarms and budget are separate resources and survive.
-- [ ] **Build the host** from [ICHABOD-GUIDE.md](ICHABOD-GUIDE.md#5-host), then Traefik. Sites under `*.ichabod-crane.net` come back by redeploying from their `ich4bod` repositories.
-- [ ] **Put Traefik's compose file in the repo.** It lives only as a snippet in the guide, with an unpinned version placeholder, and anything not in the repo is lost on a rebuild.
-- [ ] **Deploy.** `make deploy`, then again to confirm the second run changes nothing. Set each secret with `make secret`.
+- [ ] **Build the host** from [ICHABOD-GUIDE.md](ICHABOD-GUIDE.md#5-host). Sites under `*.ichabod-crane.net` come back by redeploying from their `ich4bod` repositories.
+- [ ] **Deploy.** `make deploy`, then again to confirm the second run changes nothing. Set each secret with `make secret`. Then start Traefik from [its compose file](ICHABOD-GUIDE.md#traefik-once), before any site is redeployed.
 
 ### Build the runtime
 

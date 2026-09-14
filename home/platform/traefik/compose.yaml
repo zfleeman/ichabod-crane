@@ -1,0 +1,46 @@
+# Traefik, the only thing on the box that owns ports 80 and 443. make deploy installs this at
+# /home/ichabod/platform/traefik/compose.yaml; start it there with `docker compose up -d`.
+# docs/ICHABOD-GUIDE.md, section 7, explains each piece. Update the version deliberately: it holds the Docker socket.
+
+name: ichabod-proxy
+
+services:
+  traefik:
+    image: traefik:v3.7.13
+    restart: unless-stopped
+    command:
+      - --api.dashboard=false
+      - --providers.docker=true
+      # Only containers labelled traefik.enable=true get a route.
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.letsencrypt.acme.email=ichabod@ichabod-crane.net
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+      # HTTP-01 challenges arrive on port 80, which is why 80 stays open to the world.
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - letsencrypt:/letsencrypt
+    networks:
+      - proxy
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      options:
+        max-size: 10m
+        max-file: "3"
+
+networks:
+  # Applications join this by name as an external network (home/templates/app/compose.yaml).
+  proxy:
+    name: ichabod-proxy
+
+volumes:
+  letsencrypt:

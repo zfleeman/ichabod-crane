@@ -74,6 +74,7 @@ home/        Mirrors /home/ichabod on the box
   bin/       Commands: run, board, receive-mail, send-mail, usage, set-secret
   prompts/   What cron runs, one file per pass
   workspace/ Identity and operating rules, plus skills/ for procedures he only sometimes needs. His own skills live in own-skills/ on the box, not here
+  platform/  Traefik's compose file, the one piece of the web layer that is not an application
   templates/ The starting compose file for an application
   crontab    The shipped schedule, installed by make cron
   .config/ichabod/env.example   Every secret the scripts read, with no values

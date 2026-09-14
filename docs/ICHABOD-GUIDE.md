@@ -109,7 +109,7 @@ Then, from the laptop, `make deploy` and `make secret` for each name in [`env.ex
 | Path | Contents | Backed up by |
 |---|---|---|
 | `/home/ichabod/apps/<slug>/` | One directory per application: source, Dockerfile, `compose.yaml`, its own `.git` | GitHub for source, the app's own backup for data |
-| `/home/ichabod/platform/` | Traefik and other host-owned compose projects | Git |
+| `/home/ichabod/platform/` | Traefik and other host-owned compose projects | This repo, under `home/platform/` |
 | `/home/ichabod/backups/` | Staging before a backup leaves the box | Copied off-host |
 | `/home/ichabod/src/` | Ichabod's checkouts of repositories he proposes changes to, such as his fork of `ichabod-crane` | GitHub |
 | `/var/lib/docker/` | Images, layers, build cache, named volumes | Volume by volume, never wholesale |
@@ -130,49 +130,13 @@ Traefik is the only deployment control plane. It owns 80 and 443, watches the Do
 
 ## Traefik, once
 
-`/home/ichabod/platform/traefik/compose.yaml`, on a pinned Traefik 3.x image:
+[`home/platform/traefik/compose.yaml`](../home/platform/traefik/compose.yaml) is the whole configuration, pinned to one Traefik version. `make deploy` installs it at `/home/ichabod/platform/traefik/compose.yaml`, read-only to `ichabod` like every shipped file, so a change to it is a pull request. Start it once after the first deploy, as `ichabod`:
 
-```yaml
-name: ichabod-proxy
-
-services:
-  traefik:
-    image: traefik:<PINNED_3_X_VERSION>
-    restart: unless-stopped
-    command:
-      - --api.dashboard=false
-      - --providers.docker=true
-      - --providers.docker.exposedbydefault=false
-      - --entrypoints.web.address=:80
-      - --entrypoints.web.http.redirections.entrypoint.to=websecure
-      - --entrypoints.web.http.redirections.entrypoint.scheme=https
-      - --entrypoints.websecure.address=:443
-      - --certificatesresolvers.letsencrypt.acme.email=ichabod@ichabod-crane.net
-      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
-      - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
-      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - letsencrypt:/letsencrypt
-    networks:
-      - proxy
-    security_opt:
-      - no-new-privileges:true
-    logging:
-      options:
-        max-size: 10m
-        max-file: "3"
-
-networks:
-  proxy:
-    name: ichabod-proxy
-
-volumes:
-  letsencrypt:
+```bash
+cd /home/ichabod/platform/traefik && docker compose up -d
 ```
+
+It creates the `ichabod-proxy` network that every application joins, so it has to be up before the first application.
 
 Three things that cost time:
 
