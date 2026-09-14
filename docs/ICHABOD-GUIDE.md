@@ -122,9 +122,10 @@ Everything below runs from `make shell`, which lands as `ssm-user` with password
     git config --global tag.gpgsign true
     echo "$(git config user.email) namespaces=\"git\" $(cat ~/.ssh/id_ed25519.pub)" > ~/.ssh/allowed_signers
     git config --global gpg.ssh.allowedSignersFile ~/.ssh/allowed_signers
+    gh config set git_protocol ssh
     ```
 
-    The allowed signers file lets `git log --show-signature` verify Ichabod's signatures on the box.
+    The allowed signers file lets `git log --show-signature` verify Ichabod's signatures on the box. The last line makes `gh repo clone` use this key; left at `https`, the first `git push` fails asking for a username.
 
 Then, from the laptop, `make deploy` and `make secret` for each name in [`env.example`](../home/.config/ichabod/env.example).
 
