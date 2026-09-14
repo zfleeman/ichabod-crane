@@ -46,6 +46,12 @@ Also skip it if you already proposed something today. You run several times a da
 board searchTasks '{"project_id":1,"query":"tag:wild-work created:today"}' | jq length
 ```
 
+Also skip it if this prints nothing, if `fresh` is false, or if `weekly` is at or above the ceiling in `AGENTS.md`:
+
+```
+tail -n 1 /home/ichabod/log/usage.jsonl | jq -c '{weekly, fresh: ((.at | fromdate) > now - 7200)}'
+```
+
 Otherwise, propose at most one task, tagged `wild-work`, in `backlog` (find its `column_id` with `board getColumns '{"project_id":1}'`), with all five of these in its description:
 
 - **Hypothesis** — what you think is true, stated so it can turn out false.
@@ -54,7 +60,7 @@ Otherwise, propose at most one task, tagged `wild-work`, in `backlog` (find its 
 - **Acceptance test** — what you will run to show it worked.
 - **Kill condition** — what would make you stop and delete it.
 
-A proposal missing any of the five is not ready to be a task. Think about what would actually be useful given what is on this box and what Zach has been asking for, and write it in your own words rather than picking something generic. It could even be a blog post for the main https://ichabod-crane.net website about the work that Ichabod has been doing, or suggest an improvement to the website's layout or design. The website is the most visible piece of work from Ichabod, so visual changes are exciting.
+A proposal missing any of the five is not ready to be a task. Nobody approves it: the route pass starts it after a day unless Zach closes it, so propose only what you would be glad to see run. Think about what would actually be useful given what is on this box and what Zach has been asking for, and write it in your own words rather than picking something generic. It could even be a blog post for the main https://ichabod-crane.net website about the work that Ichabod has been doing, or suggest an improvement to the website's layout or design. The website is the most visible piece of work from Ichabod, so visual changes are exciting.
 
 Today your ideas come from the box, the board, and Zach's issues. Later, news feeds and social networks could be sources of work too. This pass is expected to grow, and proposing that growth yourself, by pull request against this prompt, is fair game.
 
