@@ -64,7 +64,7 @@ One box, one Unix user, six scripts, one crontab. The repo's [`home/`](../home) 
 
 `ichabod` runs every pass, every worker, and the membrane wrapper, and holds Docker, `gh`, the ChatGPT login and the mailbox. The membrane runs as `ichabod` rather than as a user of its own — see [MEMBRANE.md](MEMBRANE.md#what-we-deliberately-gave-up) for what that costs and how the isolation is kept anyway.
 
-The schedule is [`home/crontab`](../home/crontab), installed as `/etc/cron.d/ichabod` by `make cron`. It is kept out of `make deploy` so a deploy never re-enables passes a kill switch stopped, and it lives in `/etc/cron.d` so Ichabod's own crontab stays his.
+The schedule is [`home/crontab`](../home/crontab), installed as `/etc/cron.d/ichabod-schedule` by `make cron`. It is kept out of `make deploy` so a deploy never re-enables passes a kill switch stopped, and it lives in `/etc/cron.d` so Ichabod's own crontab stays his.
 
 [`run-pass`](../home/bin/run-pass) is the whole harness. `flock -n` is the concurrency rule that `--max-starts 1` enforces today: if the previous run is still going, this one exits rather than stacking. `timeout` is the stall recovery that "a `running` card that has not moved in over an hour is stuck" currently handles by hand. `rc` is captured rather than allowed to abort under `set -e`, because a failed pass still has a log worth summarising. Pi has no working-directory flag, so the script `cd`s into `workspace/` for Pi to find `AGENTS.md`.
 

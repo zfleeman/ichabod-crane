@@ -226,7 +226,7 @@ One layer at a time, with a current backup, the old version recorded and the rel
 
 Least to most severe:
 
-1. Stop the schedule: `sudo rm /etc/cron.d/ichabod`, and `sudo crontab -u ichabod -r` for any passes Ichabod scheduled himself. `make deploy` never reinstalls it; only `make cron` does.
+1. Stop the schedule: `sudo rm /etc/cron.d/ichabod-schedule`, and `sudo crontab -u ichabod -r` for any passes Ichabod scheduled himself. `make deploy` never reinstalls it; only `make cron` does.
 2. Revoke the mailbox app passwords and the GitHub token, and sign the box out of ChatGPT.
 3. `docker compose down` in one application's directory.
 4. `make stop`.

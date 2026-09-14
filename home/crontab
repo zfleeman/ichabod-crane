@@ -1,4 +1,4 @@
-# The shipped schedule. `make cron` installs it as /etc/cron.d/ichabod; `make deploy` never does.
+# The shipped schedule. `make cron` installs it as /etc/cron.d/ichabod-schedule; `make deploy` never does.
 # Ichabod's own crontab (`crontab -l` as ichabod) is separate and his to edit.
 # intake and health are not written yet; their lines fail until they are.
 PATH=/home/ichabod/.local/bin:/usr/local/bin:/usr/bin:/bin

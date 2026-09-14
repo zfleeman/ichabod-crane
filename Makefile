@@ -78,10 +78,10 @@ deploy: ## Install the committed home/ on the box (FORCE=1 overwrites drift)
 	FORCE=$(or $(FORCE),0) scripts/deploy
 
 # Separate from deploy on purpose: a deploy must never re-enable passes a kill switch turned off.
-cron: ## Install home/crontab as the live schedule, /etc/cron.d/ichabod
+cron: ## Install home/crontab as the live schedule, /etc/cron.d/ichabod-schedule
 	aws ssm start-session --target $(INSTANCE_ID) \
 	  --document-name AWS-StartInteractiveCommand \
-	  --parameters command="sudo install -o root -g root -m 0644 /home/ichabod/crontab /etc/cron.d/ichabod && cat /etc/cron.d/ichabod"
+	  --parameters command="sudo install -o root -g root -m 0644 /home/ichabod/crontab /etc/cron.d/ichabod-schedule && cat /etc/cron.d/ichabod-schedule"
 
 # The value is typed into the session with echo off, so it never lands on a command line, in shell
 # history, or in SSM's command history. Only the name travels as a parameter.

@@ -78,7 +78,7 @@ rm -f "$new_manifest"
 echo "$commit" > "$state/commit"
 
 # The live schedule is make cron's job, so a deploy never re-enables passes a kill switch stopped.
-if ! cmp -s "$dst/crontab" /etc/cron.d/ichabod 2>/dev/null; then
-  echo "note: home/crontab differs from the live /etc/cron.d/ichabod; make cron installs it"
+if ! cmp -s "$dst/crontab" /etc/cron.d/ichabod-schedule 2>/dev/null; then
+  echo "note: home/crontab differs from the live /etc/cron.d/ichabod-schedule; make cron installs it"
 fi
 echo "deployed $commit"
