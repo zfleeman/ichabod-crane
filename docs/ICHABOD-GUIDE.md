@@ -53,7 +53,17 @@ Passwords and recovery codes live in Zach's password manager, never on the insta
 
 **Email.** A paid mailbox with a custom domain, real IMAP, real SMTP and app passwords. Fastmail Standard is the floor there, since Basic has no third-party IMAP. App passwords rather than OAuth: scoped to mail, revocable on their own, and they do not expire mid-week. DKIM is the provider's job — mail leaves through its SMTP and is signed on the way out, so nothing on the box holds a signing key. Do not self-host mail to save a few dollars; deliverability is a separate project.
 
-**Secrets.** Not AWS Secrets Manager. A root-equivalent agent with a role that can fetch a secret can fetch it anyway, so it would improve rotation, not isolation. The migration plan covers what replaces the current store and what that honestly costs.
+**Secrets.** Not AWS Secrets Manager. A root-equivalent agent with a role that can fetch a secret can fetch it anyway, so it would improve rotation, not isolation. Secrets live in one file, `/home/ichabod/.config/ichabod/env`, mode 0600, and [`env.example`](../home/.config/ichabod/env.example) lists every name it needs.
+
+Set each one from the laptop, after `home/` has been deployed:
+
+```bash
+make secret NAME=KANBOARD_TOKEN
+```
+
+That opens an SSM session straight into [`set-secret`](../home/bin/set-secret) as `ichabod`, which asks for the value with echo off and rewrites that one line of the file. The value is typed, never passed as an argument, so it stays out of shell history, `ps`, and SSM's command history, where parameters are kept. Run it again to replace a value. Avoid opening the file in an editor over `make shell`: the editor shows the values on screen, which Session Manager logging records, and vim leaves swap files behind.
+
+The ChatGPT login is the one secret not in that file. Log in once with `make shell`, then `sudo -iu ichabod`, run `pi`, type `/login`, and choose ChatGPT Plus/Pro (Codex) with the device code option. Pi keeps the token in `/home/ichabod/.pi/agent/auth.json` and refreshes it itself.
 
 # 4. Infrastructure
 

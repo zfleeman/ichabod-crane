@@ -72,6 +72,14 @@ start: ## Start the instance and wait until SSM answers
 	  done; \
 	  echo "SSM never came online; check the console in the EC2 web UI." >&2; exit 1
 
+# The value is typed into the session with echo off, so it never lands on a command line, in shell
+# history, or in SSM's command history. Only the name travels as a parameter.
+secret: ## Set one secret on the box: make secret NAME=KANBOARD_TOKEN
+	@echo "$(NAME)" | grep -Eq '^[A-Z][A-Z0-9_]*$$' || { echo "usage: make secret NAME=KANBOARD_TOKEN" >&2; exit 2; }
+	aws ssm start-session --target $(INSTANCE_ID) \
+	  --document-name AWS-StartInteractiveCommand \
+	  --parameters command="sudo -u ichabod /home/ichabod/bin/set-secret $(NAME)"
+
 ip: ## Print the Elastic IP
 	@tofu -chdir=tofu output -raw public_ip; echo
 
@@ -79,4 +87,4 @@ alarms: ## Current state of every ichabod alarm
 	aws cloudwatch describe-alarms --alarm-name-prefix ichabod- \
 	  --query 'MetricAlarms[].[AlarmName,StateValue]' --output table
 
-.PHONY: help init check plan apply shell status stop start ip alarms
+.PHONY: help init check plan apply shell status stop start secret ip alarms

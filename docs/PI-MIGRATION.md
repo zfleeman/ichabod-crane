@@ -180,7 +180,7 @@ Zach chose to run this as `ichabod` rather than as a credential-free user of its
 
 Full destruction first, then a clean build. The repo is already trimmed (2026-09-13); `git show d005f4a:<path>` recovers anything from the OpenClaw era, and nothing on the box is being preserved.
 
-- [ ] **Revoke what the old box held.** The mailbox app password, the `gh` token, the OpenAI key, and the old box's SSH key on the `ich4bod` account. The copies in 1Password could be reused, but those values sat for weeks on a box that read untrusted mail, so issue fresh ones for the new box and save each to 1Password as it is created. The OpenAI key is not replaced; the new stack runs on the ChatGPT subscription.
+- [ ] **Revoke what the old box held.** The mailbox app password, the `gh` token, the OpenAI key, and the old box's SSH key on the `ich4bod` account. Those values sat for weeks on a box that read untrusted mail, so issue fresh ones for the new box rather than reusing them. The OpenAI key is not replaced; the new stack runs on the ChatGPT subscription.
 - [ ] **Replace the instance.** In `tofu/main.tf` set `disable_api_termination = false` and apply, refresh `ami_id` in `terraform.tfvars`, then `tofu -chdir=tofu apply -replace=aws_instance.ichabod`. Set termination protection back to `true` and apply again. The Elastic IP, DNS, alarms and budget are separate resources and survive, and the association moves to the new instance on its own.
 - [ ] **Build the host** from [ICHABOD-GUIDE.md](ICHABOD-GUIDE.md#5-host), then Traefik. Sites under `*.ichabod-crane.net` come back by redeploying from their `ich4bod` repositories.
 

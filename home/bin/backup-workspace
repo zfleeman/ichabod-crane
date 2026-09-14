@@ -14,7 +14,8 @@ git diff --cached --quiet && exit 0
 
 # Every secret value on the box: TOKEN/PASSWORD/KEY/SECRET lines in the env file, and Pi's login tokens.
 secrets="$( {
-  sed -nE 's/^[A-Z_]*(TOKEN|PASSWORD|KEY|SECRET)=//p' "$home/.config/ichabod/env" | sed -E 's/^"(.*)"$/\1/'
+  # set-secret writes NAME='value'; strip single or double quotes so the scan matches the bare value.
+  sed -nE 's/^[A-Z_]*(TOKEN|PASSWORD|KEY|SECRET)=//p' "$home/.config/ichabod/env" | sed -E -e "s/^'(.*)'\$/\1/" -e 's/^"(.*)"$/\1/'
   jq -r '.. | strings' "$home/.pi/agent/auth.json"
 } | awk 'length >= 12')"
 

@@ -67,7 +67,7 @@ docs/        MEMBRANE.md is the trust boundary and the one to read first
              ICHABOD-GUIDE.md is the host, the web layer, and operations
 tofu/        The machine, DNS, alarms. Zach applies it; Ichabod never does
 home/        Mirrors /home/ichabod on the box
-  bin/       Commands: run-pass, board, usage, backup-workspace
+  bin/       Commands: run-pass, board, usage, backup-workspace, set-secret
   prompts/   What cron runs (director, scout, digest; still OpenClaw versions, to be ported)
   workspace/ Identity and operating rules, plus skills/ for procedures he only sometimes needs. His own skills live in own-skills/ on the box, not here
   templates/ The starting compose file for an application
