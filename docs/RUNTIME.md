@@ -212,7 +212,7 @@ What stands between the repository and the state described above. Tick them off 
 - [ ] **Check `scout.md` and `digest.md`** against the real board.
 - [ ] **Prove the membrane.** `receive-mail` and `membrane.md` are written to [MEMBRANE.md](MEMBRANE.md) but have never touched a real mailbox or model. They need a working `send-mail`, and Pi installed as [the guide](ICHABOD-GUIDE.md#5-host) says. The gate, the DMARC check and the output validator are unit tested in `tests/`; the model and the mailbox are not. Confirm Pi reads piped stdin alongside `@membrane.md` in `-p` mode, and that a filed message lands in `Archive`. All four of [its tests](MEMBRANE.md#how-to-test-it) pass before the `receive-mail` line in `home/crontab` is uncommented.
 - [ ] **Clone the fork.** `ich4bod/ichabod-crane` into `src/ichabod-crane`, with `upstream` pointing at `zfleeman/ichabod-crane`, as the `proposing-changes` skill expects.
-- [ ] **Prove `health`.** `make apply` for the heartbeat alarms once the box is rebuilt and `make cron` has run. Each scheduled job's alarm goes to `OK` after its first success, and removing `/etc/cron.d/ichabod-schedule` for an hour puts `ichabod-heartbeat-receive-mail` into `ALARM` with an email from SNS.
+- [ ] **Prove `health`.** `make apply` for the heartbeat alarms once the box is rebuilt and `make cron` has run. Each scheduled job's alarm goes to `OK` after its first success, and removing `/etc/cron.d/ichabod-schedule` for two hours puts `ichabod-heartbeat-receive-mail` into `ALARM` with an email from SNS.
 
 ### Prove it
 
