@@ -69,6 +69,7 @@ docs/        MEMBRANE.md is the trust boundary and the one to read first
              ICHABOD-GUIDE.md is the host, the web layer, and operations
 tofu/        The machine, DNS, alarms. Zach applies it; Ichabod never does
 scripts/     deploy and install-home, behind make deploy
+tests/       Unit tests for receive-mail and send-mail, run with make test
 home/        Mirrors /home/ichabod on the box
   bin/       Commands: run, board, receive-mail, send-mail, usage, set-secret
   prompts/   What cron runs, one file per pass

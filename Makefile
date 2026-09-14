@@ -25,6 +25,13 @@ check: ## Formatting and validation
 	tofu -chdir=tofu fmt -check
 	tofu -chdir=tofu validate
 
+# Runs on the laptop. The scripts have no .py or .sh extension, so each tool is pointed at them by name.
+test: ## Lint and unit test the scripts in home/bin
+	ruff check
+	ruff format --check
+	uvx --from shellcheck-py shellcheck -e SC1091 home/bin/run home/bin/board home/bin/usage home/bin/set-secret scripts/deploy scripts/install-home
+	uv run --group dev pytest -q
+
 plan: ## Show what would change
 	tofu -chdir=tofu plan
 
@@ -98,4 +105,4 @@ alarms: ## Current state of every ichabod alarm
 	aws cloudwatch describe-alarms --alarm-name-prefix ichabod- \
 	  --query 'MetricAlarms[].[AlarmName,StateValue]' --output table
 
-.PHONY: help init check plan apply shell status stop start deploy cron secret ip alarms
+.PHONY: help init check test plan apply shell status stop start deploy cron secret ip alarms

@@ -1,0 +1,134 @@
+#!/usr/bin/python3
+# send-mail [--in-reply-to <message-id>] <subject>   send one email to Zach, with the body on stdin.
+# The only way mail leaves the box. Its rules live here in code, not in a prompt, so no email or card can
+# widen them (docs/RUNTIME.md, "Mail"). Standard library only.
+import argparse
+import email.utils
+import fcntl
+import re
+import smtplib
+import sys
+import time
+from email.message import EmailMessage
+
+HOME = "/home/ichabod"
+ENV_FILE = f"{HOME}/.config/ichabod/env"
+SENT_FILE = f"{HOME}/.local/state/send-mail-sent"
+SMTP_HOST = "smtp.fastmail.com"
+SMTP_PORT = 465
+SENDER = "ichabod@ichabod-crane.net"
+RECIPIENT = "zfleeman@gmail.com"
+MAX_SUBJECT_CHARS = 250
+# A backstop against a loop, not a budget. Every attempt counts, so a loop that keeps failing is stopped too.
+MAX_SENDS_PER_HOUR = 20
+# Seconds to wait before the second and third attempts. receive-mail gives send-mail 120 seconds in all.
+RETRY_DELAYS_SECONDS = (10, 30)
+MESSAGE_ID = re.compile(r"<[^<>\s]+@[^<>\s]+>")
+
+
+class SendFailed(Exception):
+    """The message was not sent. The text is already redacted."""
+
+
+def load_env():
+    # The same file the bash wrappers source, in set-secret's NAME='value' format.
+    env = {}
+    with open(ENV_FILE) as f:
+        for line in f:
+            name, sep, value = line.strip().partition("=")
+            if sep and not name.startswith("#"):
+                env[name] = value.strip("'\"")
+    return env
+
+
+def build_message(subject, body, in_reply_to=None):
+    msg = EmailMessage()
+    msg["From"] = f"Ichabod Crane <{SENDER}>"
+    msg["To"] = RECIPIENT
+    msg["Subject"] = subject
+    msg["Date"] = email.utils.formatdate()
+    msg["Message-ID"] = email.utils.make_msgid(domain="ichabod-crane.net")
+    if in_reply_to:
+        # Both headers, because mail clients disagree about which one they thread on.
+        msg["In-Reply-To"] = in_reply_to
+        msg["References"] = in_reply_to
+    msg.set_content(body)
+    return msg
+
+
+def claim_send_slot(now):
+    """Record one attempt, or raise SendFailed if the last hour already used the cap."""
+    with open(SENT_FILE, "a+") as f:
+        # Locked so two send-mails at once cannot both take the last slot.
+        fcntl.flock(f, fcntl.LOCK_EX)
+        f.seek(0)
+        recent = [line.strip() for line in f if line.strip() and float(line) > now - 3600]
+        if len(recent) >= MAX_SENDS_PER_HOUR:
+            raise SendFailed(f"{len(recent)} sends in the last hour, the cap is {MAX_SENDS_PER_HOUR}")
+        # Rewritten with only the last hour, so the file never grows.
+        f.seek(0)
+        f.truncate()
+        f.write("".join(f"{t}\n" for t in [*recent, now]))
+
+
+def send(msg, password):
+    for delay in (*RETRY_DELAYS_SECONDS, None):
+        try:
+            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=30) as smtp:
+                smtp.login(SENDER, password)
+                # An explicit envelope, so the headers can never add a recipient or change the sender.
+                smtp.send_message(msg, from_addr=SENDER, to_addrs=[RECIPIENT])
+            return
+        except smtplib.SMTPRecipientsRefused as e:
+            code, error = next(iter(e.recipients.values()))[0], e
+        except smtplib.SMTPResponseException as e:
+            code, error = e.smtp_code, e
+        except OSError as e:  # includes smtplib's own errors; a dropped connection has no code and is worth a retry
+            code, error = None, e
+
+        # The server's text can echo what was sent, so the password never reaches an error message.
+        text = str(error).replace(password, "[redacted]")
+        retryable = code is None or 400 <= code < 500
+        if not retryable or delay is None:
+            raise SendFailed(f"{type(error).__name__}: {text}")
+        print(f"send-mail: attempt failed, retrying in {delay}s: {text}", file=sys.stderr)
+        time.sleep(delay)
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(prog="send-mail", description="Send one email to Zach, body on stdin.")
+    parser.add_argument("--in-reply-to", metavar="MESSAGE-ID", help="the Message-ID of the email being answered")
+    parser.add_argument("subject")
+    args = parser.parse_args(argv)
+
+    # A line break in a header would let the subject add headers of its own.
+    if not args.subject.strip() or "\r" in args.subject or "\n" in args.subject:
+        parser.error("subject must be one non-empty line")
+    if len(args.subject) > MAX_SUBJECT_CHARS:
+        parser.error(f"subject is over {MAX_SUBJECT_CHARS} characters")
+    if args.in_reply_to is not None and not MESSAGE_ID.fullmatch(args.in_reply_to):
+        parser.error("--in-reply-to must be a Message-ID like <id@host>, copied verbatim from the card")
+    body = sys.stdin.read()
+    if not body.strip():
+        parser.error("the body on stdin is empty")
+
+    password = load_env().get("SMTP_PASSWORD", "")
+    if not password:
+        print(
+            "send-mail: SMTP_PASSWORD is empty or missing; set it with: make secret NAME=SMTP_PASSWORD", file=sys.stderr
+        )
+        return 1
+
+    msg = build_message(args.subject, body, args.in_reply_to)
+    try:
+        claim_send_slot(time.time())
+        send(msg, password)
+    except SendFailed as e:
+        print(f"send-mail: not sent: {e}", file=sys.stderr)
+        return 1
+    print(f"send-mail: sent {msg['Message-ID']}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
