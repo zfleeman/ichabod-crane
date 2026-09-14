@@ -30,7 +30,7 @@ Version 1 has one allowed sender: Zach. Sender verification answers "is this who
 
 # 2. Machine and cost
 
-**Decided: `t3a.large`** — 2 vCPU, 8 GiB — with a 100 GiB gp3 root volume, around $67 a month. Eight GiB is for compilers, Docker layers, headless Chromium and a little concurrency, not the tiny sites. `t3a.medium` runs out of memory on builds; `t3a.xlarge` is only worth it after measuring real contention.
+**Decided: `t3a.large`** — 2 vCPU, 8 GiB — with a 100 GiB gp3 root volume. Eight GiB is for compilers, Docker layers, headless Chromium and a little concurrency, not the tiny sites. `t3a.medium` runs out of memory on builds; `t3a.xlarge` is only worth it after measuring real contention.
 
 CPU credits are `standard`, so a long build slows down instead of producing a surplus-credit bill. A gp3 volume gets the same baseline IOPS at any size and can be grown while running, so 100 GiB is a reversible choice. Docker is what fills it.
 
@@ -79,7 +79,7 @@ Gotchas that look like failures and are not:
 
 - `disable_api_termination = true` makes `tofu destroy` fail. Set it false and apply once before an intentional teardown.
 - The SNS email subscription stays pending until the confirmation link is clicked, and alarms are silent until then.
-- The three `CWAgent` alarms sit in `INSUFFICIENT_DATA` until the CloudWatch agent is installed on the host.
+- The `CWAgent` alarms sit in `INSUFFICIENT_DATA` until the CloudWatch agent is installed on the host.
 - A fresh host trips `ichabod-cpu-credit-balance-low` during setup, because patching and installing Docker spend the launch credits. It clears on its own once the box idles.
 
 # 5. Host
@@ -112,27 +112,13 @@ Everything below runs from `make shell`, which lands as `ssm-user` with password
    This puts `node` and `pi` in `/usr/bin`, owned by root. `receive-mail` starts the membrane with `PATH=/usr/bin` and nothing else, so a `pi` installed anywhere else makes every email fail. Root ownership also means Ichabod cannot swap the `pi` the membrane runs. Check all three: `env -i PATH=/usr/bin pi --version` prints a version, `sudo -u ichabod bash -lc 'command -v pi'` prints `/usr/bin/pi`, and `ls -l /usr/bin/pi` shows root. To upgrade, change both pins here and rerun these lines.
 10. As `ichabod`, generate an SSH key with `ssh-keygen -t ed25519` and add the public half to `ich4bod` as an account key. Set `git config --global user.name` and `user.email` to Ichabod's.
 
-Then, from the laptop, `make deploy` and `make secret` for each name in [`env.example`](../home/.config/ichabod/env.example). [RUNTIME.md](RUNTIME.md) covers everything after that.
-
-## Where things live
-
-| Path | Contents | Backed up by |
-|---|---|---|
-| `/home/ichabod/apps/<slug>/` | One directory per application: source, Dockerfile, `compose.yaml`, its own `.git` | GitHub for source, the app's own backup for data |
-| `/home/ichabod/platform/` | Traefik and other host-owned compose projects | This repo, under `home/platform/` |
-| `/home/ichabod/backups/` | Staging before a backup leaves the box | Copied off-host |
-| `/home/ichabod/src/` | Ichabod's checkouts of repositories he proposes changes to, such as his fork of `ichabod-crane` | GitHub |
-| `/var/lib/docker/` | Images, layers, build cache, named volumes | Volume by volume, never wholesale |
-
-The runtime's own directories are laid out in [RUNTIME.md](RUNTIME.md#layout). `/var/lib/docker` is what fills the disk; `docker system df` is the thing to watch.
+Then, from the laptop, `make deploy` and `make secret` for each name in [`env.example`](../home/.config/ichabod/env.example).
 
 # 6. Administration
 
 Every command Zach runs by hand is a `make` target, so connection details live in version control. `make help` lists them. The SSM targets read the instance ID from tofu state rather than hardcoding it, and every target runs as the `ZACH-ROOT` AWS profile, exported so `tofu` reads it too. The laptop needs `brew install --cask session-manager-plugin` once.
 
 `make status` asks two services one question, because either can be the problem: EC2 knows whether the machine is on, SSM knows whether it is reachable. `running / not answering` is the case worth spotting. `make start` waits for SSM, not just for EC2 to say `running`, because everything else needs SSM.
-
-Session Manager can log every session to S3 or CloudWatch Logs, which is worth enabling so administrative access to a root-equivalent box is auditable.
 
 # 7. Web: Traefik and applications
 
@@ -158,7 +144,7 @@ Back up the `ichabod-proxy_letsencrypt` volume or expect to re-issue after a reb
 
 ## The application contract
 
-[`home/templates/app/compose.yaml`](../home/templates/app/compose.yaml) is the starting point and already carries the shape. An application builds reproducibly from its repository, listens on `0.0.0.0` inside the container, publishes no host port, joins the external `ichabod-proxy` network, sets an explicit `Host()` rule, has a health check it can actually fail, and sets restart, CPU, memory, PID and log limits. The template's CPU and memory defaults are a blast radius, not a budget, and are raised from a measured peak, never an estimate. Those limits are the only capacity ceiling on the box that Docker enforces rather than the agent remembering.
+[`home/templates/app/compose.yaml`](../home/templates/app/compose.yaml) is the contract, and the `deploying-apps` skill is how Ichabod follows it. Its CPU and memory limits matter most: they are the only capacity ceiling on the box that Docker enforces rather than the agent remembering, so they are a blast radius, raised from a measured peak and never from an estimate.
 
 The deploy sequence:
 
@@ -175,7 +161,7 @@ curl --fail https://<slug>.ichabod-crane.net/healthz
 
 Push source before or immediately after deploying; GitHub is the durable history and the local image is replaceable. Every stateful application's README names its volume, backup command, restore command, retention, and last tested restore date — an EBS snapshot captures bytes, not a consistent database, and GitHub never has the data.
 
-Housekeeping: roughly five running experiments at most, one active heavy build, prune build cache and unreferenced images only after looking at them, and never automate `docker volume prune`.
+The capacity limits Ichabod works within, such as how many experiments may run at once, are in [`AGENTS.md`](../home/workspace/AGENTS.md#capacity).
 
 # 8. Operations
 

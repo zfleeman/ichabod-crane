@@ -12,11 +12,11 @@ Zach sends an email. A reader with no tools turns it into a card on a board. The
 
 ## Status
 
-The repository describes the box as it should be, not as it is today. What is left to build, prove, and decide is the [Open actions](docs/RUNTIME.md#open-actions) list; delete an item when it is done.
+The repository describes the box as it should be, not as it is today. Work still to do is in [GitHub Issues](https://github.com/zfleeman/ichabod-crane/issues).
 
 ## Why Pi
 
-**Ichabod runs on Pi and cron.** Every turn re-sends the model's preamble, so framework tokens come out of the same allowance as the work. Pi is four tools and a short system prompt, driven from a crontab, and [docs/RUNTIME.md](docs/RUNTIME.md#why-pi-and-cron) has the measurement behind that choice.
+**Ichabod runs on Pi and cron.** Every turn re-sends the model's preamble, so framework tokens come out of the same allowance as the work. Pi is four tools and a short system prompt, driven from a crontab, and [docs/RUNTIME.md](docs/RUNTIME.md#why-pi-and-cron) has the reasoning.
 
 ## How it works
 
@@ -27,7 +27,7 @@ email ──> receive-mail ──> pi, no tools ──> validated card ──> r
 
 | Piece | What it is |
 |---|---|
-| Host | One t3a.large, built by OpenTofu in `tofu/`. No inbound SSH; access is AWS SSM only |
+| Host | One EC2 instance, built by OpenTofu in `tofu/`. No inbound SSH; access is AWS SSM only |
 | Passes | Prompt files run by `pi` from cron, each under a lock and a timeout |
 | Board | Kanboard on Zach's Synology, reached by a `board` shell wrapper over JSON-RPC |
 | Membrane | `receive-mail` fetches mail, a tool-less `pi` describes it, and the script writes the card itself |
@@ -49,35 +49,40 @@ The kit is one Claude Code process in a terminal, running `--dangerously-skip-pe
 
 The kit optimizes for **never stopping**. This project optimizes for **never trusting the input**. The kit's loop instructions say "NEVER STOP THE LOOP" because a stalled agent is the failure it fears most. Here, the failure we design against is an email talking a root-equivalent agent into running something.
 
-## Verify by asking the live system
+## Design principles
 
-Almost every bug in this project's history was the same bug wearing a different hat: **the check reported health while answering a different question than the one asked.** A config validator passed on an agent that was not sandboxed at all. A sandbox report printed `runtime: sandboxed` for a reader that had a shell, Docker and the network. A service check said `inactive` for a user unit that was serving fine. A healthy Traefik logs nothing, which reads exactly like a dead one.
-
-**The verification that works is asking the live system what it can actually do** — calling the tool and watching what happens, not reading its config. Every real defect here was found that way.
-
-Three failure shapes worth designing against, because they are worse than an error:
-
-- **Silent skip.** A credential that fails to resolve and makes `receive-mail` skip the mailbox rather than error looks exactly like nobody having written. Fail loudly, and say which command fixes it.
-- **Confident fabrication.** A reader told to record a `Message-ID` it was never given invented a plausible one, which sat on a card looking like evidence. An absent field is safe; a fabricated one is not.
-- **Half-applied guard.** A hook that deleted dangerous fields from a tool call did nothing, because the host merged the model's original arguments back over it — and logged that the hook ran. Prefer designs where the dangerous thing cannot be expressed at all.
+- **Verify by asking the live system.** Call the tool and watch what happens instead of reading its config. A check can report healthy while answering a different question than the one asked.
+- **Fail loudly.** A skipped step that looks like a quiet day is worse than an error. Say what failed and which command fixes it.
+- **Never let a model fill a gap.** Ask a model only for what it was given. An absent field is safe; an invented one looks like evidence.
+- **Make the dangerous thing impossible to express.** A guard that strips bad input can be bypassed or silently skipped. A design with no place for the bad input needs no guard.
+- **Code is the source of truth.** A rule, a limit or a schedule lives in the script or config that enforces it, and the docs explain why.
 
 ## Layout
 
 ```
 docs/        MEMBRANE.md is the trust boundary and the one to read first
-             RUNTIME.md is Pi, cron, the board, and the open actions
+             RUNTIME.md is why the runtime is Pi, cron, and a board
              ICHABOD-GUIDE.md is the host, the web layer, and operations
 tofu/        The machine, DNS, alarms. Zach applies it; Ichabod never does
 scripts/     deploy and install-home, behind make deploy
 tests/       Unit tests for receive-mail and send-mail, run with make test
 home/        Mirrors /home/ichabod on the box
-  bin/       Commands: run, board, receive-mail, send-mail, usage, set-secret
+  bin/       Commands Ichabod and cron run. Each script's header says what it does
   prompts/   What cron runs, one file per pass
-  workspace/ Identity and operating rules, plus skills/ for procedures he only sometimes needs. His own skills live in own-skills/ on the box, not here
+  workspace/ AGENTS.md, which Pi loads every run, plus identity files and skills/. USER.md and MEMORY.md are seeded once, then Ichabod's
   platform/  Traefik's compose file, the one piece of the web layer that is not an application
   templates/ The starting compose file for an application
   crontab    The shipped schedule, installed by make cron
   .config/ichabod/env.example   Every secret the scripts read, with no values
+
+Only on the box, never in this repo:
+  /home/ichabod/workspace/memory/              Ichabod's journal
+  /home/ichabod/workspace/own-skills/          Skills Ichabod writes himself
+  /home/ichabod/log/                           One log per run, plus cost.jsonl and usage.jsonl
+  /home/ichabod/.local/state/                  Locks, and the success markers health reads
+  /home/ichabod/apps/<slug>/                   One directory per application, source on GitHub
+  /home/ichabod/src/                           Ichabod's checkouts, such as his fork of this repo
+  /home/ichabod/backups/                       Staging before a backup leaves the box
 ```
 
 Where a new capability goes: a command he runs is a script in `home/bin/`, a procedure he follows is a skill in `home/workspace/skills/`, and something on a schedule is a prompt in `home/prompts/` plus a `crontab` line. No Pi extensions and no MCP servers: under Pi his only tools are `read`, `write`, `edit` and `bash`, and everything else is a script he calls.
