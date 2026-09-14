@@ -1,0 +1,18 @@
+# Only for linting and testing the Python scripts in home/bin. Nothing here is installed on the box,
+# which gets python3-dkim and python3-dnspython from apt (docs/ICHABOD-GUIDE.md, section 5).
+[project]
+name = "ichabod-crane"
+version = "0"
+requires-python = ">=3.12"
+dependencies = []
+
+[dependency-groups]
+dev = ["pytest", "dkimpy", "dnspython", "cryptography"]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 120
+# The scripts have no .py extension, so ruff would skip them without this.
+extend-include = ["home/bin/receive-mail", "home/bin/send-mail"]
