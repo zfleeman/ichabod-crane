@@ -88,6 +88,8 @@ memory/
 
 **What goes in it.** What is worth keeping and does not belong to one card: a lesson about the box, a debugging trail that spans cards, a maintenance finding, the command that finally worked. Reasoning about a card goes on that card as a comment. A pass with nothing worth keeping writes nothing, which is the big change from the old director pass, whose cards could not take comments and so wrote an entry every run.
 
+**Flat by day, on purpose.** The ISO date in each name already works as a year, month and day hierarchy (`memory/2026-09-*.md` is September), and `MEMORY.md` is the long-range summary, so there are no year or month folders or rollups to keep in sync. If a month view is ever wanted, a pass writes `memory/2026-09.md` beside the days it covers.
+
 **Naming.** `NN-HHMM-<topic>.md`. `NN` is the entry's position in the day and keeps the folder in order, `HHMM` is when it was written, and `<topic>` is a short slug. An entry holding one card's detail that is too long for a comment is `card-<id>`, and the card links to it.
 
 **Reading it.** The day's contents page first, then single entries. `grep -r` across `memory/` finds something older. Never open a whole day.
