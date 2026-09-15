@@ -78,7 +78,7 @@ email ──> receive-mail (Python) ──> pi, with no tools ──> JSON on st
 
 ### Step 3 — Validate, then write
 
-`receive-mail` parses the output as JSON against a fixed shape, `SCHEMA` in the script: four fields, three strings and a boolean. Anything else, whether invalid JSON, an extra field or a missing one, is quarantined and Zach gets an email. There is no repair step, because a repair step is another parser running on hostile text.
+`receive-mail` parses the output as JSON against a fixed shape, `SCHEMA` in the script: four fields, three strings and a boolean. Anything else, whether invalid JSON, an extra field or a missing one, gets one more try, because models occasionally print garbage. A second failure is quarantined and Zach gets an email. What the reader printed both times is saved in `~/.local/state/receive-mail-bad-output/`, never in `log/`, so a quarantine can be explained later. There is no repair step, because a repair step is another parser running on hostile text.
 
 If the output validates, **`receive-mail` creates the card itself**, with the column and labels hardcoded, and moves the message to `Archive`. From then on the card is the record, and no agent needs to open the mailbox.
 

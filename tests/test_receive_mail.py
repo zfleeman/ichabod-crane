@@ -307,3 +307,34 @@ def test_one_pair_of_fences_is_stripped():
 def test_anything_else_is_quarantined(output):
     with pytest.raises(rm.Quarantine):
         rm.parse_reader_output(output)
+
+
+# --- Retrying the reader ----------------------------------------------------------------------------------------
+
+
+@pytest.fixture
+def fake_reader(tmp_path, monkeypatch):
+    """Replace pi with a queue of printed outputs, and save bad output under tmp_path."""
+    outputs = []
+
+    def run(args, **kwargs):
+        return rm.subprocess.CompletedProcess(args, 0, stdout=outputs.pop(0).encode(), stderr=b"pi said something")
+
+    monkeypatch.setattr(rm.subprocess, "run", run)
+    monkeypatch.setattr(rm, "BAD_OUTPUT_DIR", str(tmp_path / "bad"))
+    return outputs
+
+
+def test_one_bad_output_is_retried(fake_reader, tmp_path):
+    fake_reader.extend(["not JSON", json.dumps(GOOD)])
+    assert rm.run_reader(email.message_from_bytes(raw_message(), policy=email.policy.default), "76") == GOOD
+    [saved] = (tmp_path / "bad").iterdir()
+    assert saved.name.endswith("-uid76-try1.txt")
+    assert saved.read_text() == "--- stdout ---\nnot JSON\n--- stderr ---\npi said something"
+
+
+def test_two_bad_outputs_are_quarantined(fake_reader, tmp_path):
+    fake_reader.extend(["not JSON", "still not JSON"])
+    with pytest.raises(rm.Quarantine, match="on both tries"):
+        rm.run_reader(email.message_from_bytes(raw_message(), policy=email.policy.default), "76")
+    assert len(list((tmp_path / "bad").iterdir())) == 2

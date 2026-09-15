@@ -47,6 +47,8 @@ OK_FILE = f"{HOME}/.local/state/receive-mail.ok"
 # Touched when Zach is told the mailbox will not open, so a revoked password emails him once a day, not every run.
 LOGIN_ALERT_FILE = f"{HOME}/.local/state/receive-mail-login-alert"
 LOGIN_ALERT_EVERY_SECONDS = 24 * 3600
+# What the reader printed when it could not be parsed. Kept out of log/, which the passes read.
+BAD_OUTPUT_DIR = f"{HOME}/.local/state/receive-mail-bad-output"
 
 READER = [
     "/usr/bin/env", "-i", "HOME=/tmp", "PATH=/usr/bin",
@@ -265,22 +267,37 @@ def parse_reader_output(text):
     return card
 
 
-def run_reader(msg):
-    result = subprocess.run(
-        READER, input=reader_input(msg).encode(), capture_output=True, timeout=READER_TIMEOUT_SECONDS, check=False
+def run_reader(msg, uid):
+    reader_text = reader_input(msg).encode()
+    # A bad parse gets one more try, since one-off garbage from the model is more likely than a bad email.
+    for attempt in (1, 2):
+        result = subprocess.run(
+            READER, input=reader_text, capture_output=True, timeout=READER_TIMEOUT_SECONDS, check=False
+        )
+        # A failed or timed-out pi is an outage, not a verdict: raise, leave the message unread, retry next run.
+        # A message that keeps failing ages past the 48-hour gate and is rejected.
+        if result.returncode != 0:
+            raise RuntimeError(f"pi exited {result.returncode}")
+        output = result.stdout.decode("utf-8", "replace")
+        try:
+            return parse_reader_output(output)
+        except Quarantine as q:
+            # By hand (MEMBRANE.md's tests), show what the reader printed. From cron, only the saved file has it.
+            if sys.stderr.isatty():
+                print(output, file=sys.stderr)
+            save_bad_output(uid, attempt, result)
+            if attempt == 2:
+                raise Quarantine(f"{q} on both tries; output saved in {BAD_OUTPUT_DIR}") from None
+
+
+def save_bad_output(uid, attempt, result):
+    # The filename is built from fixed parts only. stderr is kept too, since pi can print an error and still exit 0.
+    directory = pathlib.Path(BAD_OUTPUT_DIR)
+    directory.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    (directory / f"{stamp}-uid{uid}-try{attempt}.txt").write_bytes(
+        b"--- stdout ---\n" + result.stdout[:20_000] + b"\n--- stderr ---\n" + result.stderr[-20_000:]
     )
-    # A failed or timed-out pi is an outage, not a verdict: raise, leave the message unread, retry next run.
-    # A message that keeps failing ages past the 48-hour gate and is rejected.
-    if result.returncode != 0:
-        raise RuntimeError(f"pi exited {result.returncode}")
-    output = result.stdout.decode("utf-8", "replace")
-    try:
-        return parse_reader_output(output)
-    except Quarantine:
-        # By hand (MEMBRANE.md's tests), show what the reader printed. From cron, keep it out of log/.
-        if sys.stderr.isatty():
-            print(output, file=sys.stderr)
-        raise
 
 
 def file_card(card, address, message_id, date_header, received_at):
@@ -351,7 +368,7 @@ def process(imap, uid, uidvalidity, seen_uids, seen_message_ids):
     # Past the gate: from here on, the body is read, but only by the reader.
     address = msg.get_all("From")[0].addresses[0].addr_spec.lower()
     try:
-        card = run_reader(msg)
+        card = run_reader(msg, uid)
     except Quarantine as q:
         imap.uid("MOVE", uid, QUARANTINE_FOLDER)
         record(uidvalidity, int(uid), message_id, "quarantined")
