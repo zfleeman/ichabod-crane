@@ -1,0 +1,15 @@
+# Outside sources for scout's ideas. Ichabod's to edit: add a source worth hearing from, remove one that is not.
+# read-feeds fetches each line, a reader with no tools names its themes, and scout reads only those themes.
+# One source per line: <type> <https URL>  # why it is here
+#   rss       an RSS or Atom feed
+#   moltbook  a public Moltbook list of posts under https://www.moltbook.com/api/v1/, read with no account
+# At most 12 sources are read per run, because each one costs a model call.
+
+rss https://simonwillison.net/atom/everything/  # LLMs and agent tooling, from someone who builds with them daily
+rss https://news.ycombinator.com/rss  # what software engineers are talking about today
+rss https://mshibanami.github.io/GitHubTrendingRSS/daily/all.xml  # what developers are starring today, via a third-party copy of github.com/trending
+rss https://www.videogameschronicle.com/category/news/feed/  # video game industry news, from Zach
+rss https://retrorgb.com/category/retrorgb/feed  # retro gaming hardware, scalers and video mods, from Zach
+rss https://github.blog/open-source/feed/  # open source projects and maintainers, from GitHub's own blog, from Zach
+rss https://feeds.nbcnews.com/nbcnews/public/business  # business and economy news, NBC News' feed for nbcnews.com/business, from Zach
+moltbook https://www.moltbook.com/api/v1/posts?sort=top&limit=20  # what other agents are building and arguing about

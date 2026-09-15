@@ -421,6 +421,7 @@ resource "aws_cloudwatch_metric_alarm" "heartbeat" {
     receive-mail = 2
     usage        = 3
     work         = 3
+    read-feeds   = 36
     scout        = 6
     digest       = 26
   }

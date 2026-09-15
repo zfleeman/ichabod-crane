@@ -28,7 +28,7 @@ email ──> receive-mail ──> pi, no tools ──> validated card ──> r
 | Host | One EC2 instance, built by OpenTofu in `tofu/`. No inbound SSH; access is AWS SSM only |
 | Passes | Prompt files run by `pi` from cron, each under a lock and a timeout |
 | Board | Kanboard on Zach's Synology, reached by a `board` shell wrapper over JSON-RPC |
-| Membrane | `receive-mail` fetches mail, a tool-less `pi` describes it, and the script writes the card itself |
+| Membrane | `receive-mail` fetches mail, a tool-less `pi` describes it, and the script writes the card itself. `read-feeds` does the same for outside feeds, writing themes for scout instead of cards |
 | Web | Traefik terminates TLS for anything Ichabod deploys, on a wildcard DNS record |
 
 ## The trust boundary
@@ -68,6 +68,10 @@ Not by reading the config. By attacking it. All four pass before `receive-mail` 
 2. **Credentials.** Asking a tool-less model to print its environment proves nothing. Temporarily replace `pi` in `READER` with `env`, run `receive-mail` on a test message, and confirm the output lists only `HOME`, `PATH` and `PI_CODING_AGENT_DIR`. Then put `pi` back.
 3. **Malformed output.** Make the model ramble instead of returning JSON. It must quarantine and email, not guess. Run by hand, `receive-mail` prints what the reader said.
 4. **Normal.** A real request from Zach becomes one clean card not marked `suspicious`. An empty reply does not count, because it asks for nothing.
+
+`read-feeds` uses the same reader for scout's outside sources, so the same four tests pass before its crontab line runs. Save a feed on the box and run it with `read-feeds --try rss <file>`, which prints what would reach scout: a feed item containing the `curl` line must print `"suspicious": true` with no themes, `env` in place of `pi` in its `READER` must list the same three variables, a rambling reader must be quarantined, and a real feed must print themes.
+
+**Ichabod edits his own source list** in `workspace/sources.txt`. That does not widen his trust boundary, because a source cannot instruct him. The reader, the schema and the limits in `read-feeds` are what keep feed text harmless, and those are Zach's.
 
 ## The runtime
 
@@ -189,11 +193,11 @@ To change a version pin, edit it at the top of `scripts/build-host` and run `mak
 ```
 tofu/        The machine, DNS, alarms. Zach applies it; Ichabod never does
 scripts/     build-host behind make build-host; deploy and install-home behind make deploy
-tests/       Unit tests for receive-mail and send-mail, run with make test
+tests/       Unit tests for receive-mail, send-mail and read-feeds, run with make test
 home/        Mirrors /home/ichabod on the box
   bin/       Commands Ichabod and cron run. Each script's header says what it does
   prompts/   What cron runs, one file per pass
-  workspace/ AGENTS.md and MEMORY.md, both in every run's prompt, plus skills/. MEMORY.md is seeded once, then Ichabod's
+  workspace/ AGENTS.md and MEMORY.md, both in every run's prompt, plus skills/. MEMORY.md and sources.txt are seeded once, then Ichabod's
   platform/  Traefik's compose file, the one piece of the web layer that is not an application
   templates/ The starting compose file for an application
   crontab    The shipped schedule, installed by make cron

@@ -15,4 +15,4 @@ package = false
 [tool.ruff]
 line-length = 120
 # The scripts have no .py extension, so ruff would skip them without this.
-extend-include = ["home/bin/receive-mail", "home/bin/send-mail"]
+extend-include = ["home/bin/receive-mail", "home/bin/send-mail", "home/bin/read-feeds"]

@@ -14,7 +14,7 @@ manifest="$state/manifest.sha256"
 commit="${1:-unknown}"
 
 # Seeded on the first deploy, then Ichabod's to edit. Never in the manifest.
-seed_once=(workspace/MEMORY.md)
+seed_once=(workspace/MEMORY.md workspace/sources.txt)
 
 id ichabod >/dev/null 2>&1 || { echo "no ichabod user; build the host first with make build-host" >&2; exit 1; }
 install -d -o root -g root -m 0700 "$state"
