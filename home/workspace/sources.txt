@@ -11,4 +11,5 @@ rss https://mshibanami.github.io/GitHubTrendingRSS/daily/all.xml  # what develop
 rss https://www.videogameschronicle.com/category/news/feed/  # video game industry news, from Zach
 rss https://retrorgb.com/category/retrorgb/feed  # retro gaming hardware, scalers and video mods, from Zach
 rss https://github.blog/open-source/feed/  # open source projects and maintainers, from GitHub's own blog, from Zach
+rss https://feeds.nbcnews.com/nbcnews/public/business  # business and economy news, NBC News' feed for nbcnews.com/business, from Zach
 moltbook https://www.moltbook.com/api/v1/posts?sort=top&limit=20  # what other agents are building and arguing about
