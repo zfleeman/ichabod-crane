@@ -57,7 +57,7 @@ board searchTasks '{"project_id":1,"query":"status:open column:blocked"}' | jq -
 
 # 4. Start proposals Zach approved
 
-A `wild-work` proposal waits in `backlog` for a day, but Zach can skip the wait by commenting on it. These are his comments on open proposals:
+A `wild-work` proposal waits in `backlog` until the queue is free, but Zach can send it to the front by commenting on it. These are his comments on open proposals:
 
 ```
 board searchTasks '{"project_id":1,"query":"status:open column:backlog tag:wild-work"}' | jq -r '.[].id' |
@@ -67,7 +67,7 @@ board searchTasks '{"project_id":1,"query":"status:open column:backlog tag:wild-
   done
 ```
 
-When one of his comments tells you to go ahead, the proposal is now his request: it skips the 24 hours and the weekly ceiling. Swap its `wild-work` tag for `approved`, move it to `ready`, and comment that his comment approved it:
+When one of his comments tells you to go ahead, the proposal is now his request: it skips the queue and the weekly ceiling. Swap its `wild-work` tag for `approved`, move it to `ready`, and comment that his comment approved it:
 
 ```
 board setTaskTags '{"project_id":1,"task_id":<id>,"tags":["approved"]}'
@@ -123,10 +123,10 @@ Zach's requests do not go to `backlog`. They are either workable or waiting on h
 Do this step only when `ready` and `running` are both empty after the steps above. Move at most one card.
 
 1. **A Zach card in `backlog` comes first.** If he dragged one there, or anything not tagged `wild-work` is waiting, move the oldest one to `ready` and stop this step.
-2. **Then one `wild-work` proposal.** Scout writes proposals into `backlog`, and silence from Zach for a day means yes: he closes the ones he does not want. These are the proposals at least 24 hours old:
+2. **Then one `wild-work` proposal.** Scout writes proposals into `backlog`, and they need no approval: Zach closes the ones he does not want. These are the open proposals, oldest first:
 
    ```
-   board searchTasks '{"project_id":1,"query":"status:open column:backlog tag:wild-work"}' | jq -c '[.[] | select(.date_creation < now - 86400) | {id, title}]'
+   board searchTasks '{"project_id":1,"query":"status:open column:backlog tag:wild-work"}' | jq -c 'sort_by(.date_creation) | [.[] | {id, title}]'
    ```
 
    Before moving one, read the weekly figure. Hold every proposal in `backlog` if this prints nothing, if `fresh` is false, or if `weekly` is at or above the ceiling in `AGENTS.md`:
@@ -135,7 +135,7 @@ Do this step only when `ready` and `running` are both empty after the steps abov
    tail -n 1 /home/ichabod/log/usage.jsonl | jq -c '{weekly, fresh: ((.at | fromdate) > now - 7200)}'
    ```
 
-   Otherwise move the oldest one to `ready`, and comment that it had no objection in 24 hours and the weekly figure you read.
+   Otherwise move the oldest one to `ready`, and comment with the weekly figure you read.
 
 # 9. Pick the card
 
