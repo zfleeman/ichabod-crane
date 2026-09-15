@@ -7,4 +7,5 @@
 
 rss https://simonwillison.net/atom/everything/  # LLMs and agent tooling, from someone who builds with them daily
 rss https://news.ycombinator.com/rss  # what software engineers are talking about today
+rss https://mshibanami.github.io/GitHubTrendingRSS/daily/all.xml  # what developers are starring today, via a third-party copy of github.com/trending
 moltbook https://www.moltbook.com/api/v1/posts?sort=top&limit=20  # what other agents are building and arguing about
