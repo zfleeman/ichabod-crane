@@ -9,13 +9,14 @@ PATH=/home/ichabod/bin:/home/ichabod/.local/bin:/usr/local/bin:/usr/bin:/bin
 5,35 * * * *     ichabod  /home/ichabod/bin/run work openai-codex/gpt-5.6-terra >> /home/ichabod/log/run.log 2>&1
 # read-feeds runs at twenty past, between receive-mail's runs, and scout picks up its themes on its next run.
 20 */12 * * *    ichabod  /home/ichabod/bin/read-feeds >> /home/ichabod/log/read-feeds.log 2>&1
-# scout runs every 45 minutes, which cron can only say in three lines: :00 and :45, then :30, then :15, repeating every three hours.
-0,45 */3 * * *   ichabod  /home/ichabod/bin/run scout openai-codex/gpt-5.6-luna >> /home/ichabod/log/run.log 2>&1
-30 1-23/3 * * *  ichabod  /home/ichabod/bin/run scout openai-codex/gpt-5.6-luna >> /home/ichabod/log/run.log 2>&1
-15 2-23/3 * * *  ichabod  /home/ichabod/bin/run scout openai-codex/gpt-5.6-luna >> /home/ichabod/log/run.log 2>&1
-# Five scout runs back to back at 02:00 UTC, 8 p.m. in Denver during daylight time, to fill the board overnight.
-# Each run takes a few minutes, so the 01:30 run is done; a run skipped by the lock is simply one fewer.
-0 2 * * *        ichabod  for i in 1 2 3 4 5; do /home/ichabod/bin/run scout openai-codex/gpt-5.6-luna; done >> /home/ichabod/log/run.log 2>&1
+# scout runs every 45 minutes, which cron can only say in three lines: :10 and :55, then :40, then :25, repeating every three hours.
+# Starting at ten past keeps a regular run from taking the lock at 02:00 or 03:00, when the 8 p.m. runs below start.
+10,55 */3 * * *  ichabod  /home/ichabod/bin/run scout openai-codex/gpt-5.6-luna >> /home/ichabod/log/run.log 2>&1
+40 1-23/3 * * *  ichabod  /home/ichabod/bin/run scout openai-codex/gpt-5.6-luna >> /home/ichabod/log/run.log 2>&1
+25 2-23/3 * * *  ichabod  /home/ichabod/bin/run scout openai-codex/gpt-5.6-luna >> /home/ichabod/log/run.log 2>&1
+# Five scout runs back to back at 8 p.m. Denver time, to fill the board overnight. The box is on UTC, so this fires at
+# 02:00 and 03:00 and only the one that is 8 p.m. in Denver runs. Cron needs the % escaped. A run skipped by the lock is one fewer.
+0 2,3 * * *      ichabod  [ "$(TZ=America/Denver date +\%H)" = 20 ] && for i in 1 2 3 4 5; do /home/ichabod/bin/run scout openai-codex/gpt-5.6-luna; done >> /home/ichabod/log/run.log 2>&1
 0 7 * * *        ichabod  /home/ichabod/bin/run digest openai-codex/gpt-5.6-luna >> /home/ichabod/log/run.log 2>&1
 # health runs at ten to the hour, so the jobs that start on the hour have finished and are counted.
 50 * * * *       ichabod  /home/ichabod/bin/health >> /home/ichabod/log/health.log 2>&1
