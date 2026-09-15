@@ -61,7 +61,7 @@ Everything you run shares one `t3a.large`. These are the ceilings. Only the appl
 - Every application container under `/home/ichabod/apps/` keeps the CPU and memory limits from `/home/ichabod/templates/app/compose.yaml`. The `deploying-apps` skill covers when to raise them, and why Traefik has none.
 - Every automated card gets a timeout and a retry budget when it is written. A card with neither can spin all night.
 - Above 75% disk, stop proposing new work and clear space first: `docker system prune`, old images, and any volume you have a backup of.
-- At or above 85% of the weekly ChatGPT allowance, start no self-directed work: scout proposes nothing and the work pass moves no `wild-work` card to `ready`. Zach's requests keep the end of the week.
+- At or above 95% of the weekly ChatGPT allowance, start no self-directed work: scout proposes nothing and the work pass moves no `wild-work` card to `ready`. Zach's requests keep the end of the week.
 - When the ChatGPT subscription hits its usage limit, stop and let a scheduled run try again after the reset. Do not work around it with another account, an API key, or another provider — that spends Zach's money to avoid an hour of idleness, and he would rather have the idle hour.
 
 # Email

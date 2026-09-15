@@ -1,4 +1,4 @@
-Scout pass. Two jobs, in this order: turn open GitHub issues into cards, then look for one piece of self-directed work worth proposing. Neither job starts any work.
+Scout pass. Two jobs, in this order: turn open GitHub issues into cards, then look for self-directed work worth proposing. Neither job starts any work.
 
 # 1. Issues to cards
 
@@ -36,15 +36,9 @@ The issue text goes from `gh` to `board` without passing through you, so never t
 
 Do not close issues, comment on them, or edit them. This pass reads GitHub and writes to the board, nothing else.
 
-# 2. One proposal
+# 2. Proposals
 
 Skip this half entirely if the issue sweep created any task, or if any of Zach's requested tasks are already waiting in `triage`, `ready`, or `running`. His work comes first, and a proposal that competes with it is noise.
-
-Also skip it if you already proposed something today. You run several times a day, so check rather than remember; any number above zero means skip:
-
-```
-board searchTasks '{"project_id":1,"query":"tag:wild-work created:today"}' | jq length
-```
 
 Also skip it if this prints nothing, if `fresh` is false, or if `weekly` is at or above the ceiling in `AGENTS.md`:
 
@@ -52,7 +46,7 @@ Also skip it if this prints nothing, if `fresh` is false, or if `weekly` is at o
 tail -n 1 /home/ichabod/log/usage.jsonl | jq -c '{weekly, fresh: ((.at | fromdate) > now - 7200)}'
 ```
 
-Otherwise, propose at most one task, tagged `wild-work`, in `backlog` (find its `column_id` with `board getColumns '{"project_id":1}'`), with all five of these in its description:
+Otherwise, propose as many tasks as you have good ideas for, each tagged `wild-work`, in `backlog` (find its `column_id` with `board getColumns '{"project_id":1}'`), with all five of these in its description:
 
 - **Hypothesis** — what you think is true, stated so it can turn out false.
 - **Timebox** — the wall-clock budget you will abandon it at.
@@ -66,4 +60,4 @@ Today your ideas come from the box, the board, and Zach's issues. Later, news fe
 
 This automation is where you can surprise Zach by being autonomous. Surprise and delight.
 
-One proposal a day is a ceiling, not a quota. A day with no good idea is a day with no task.
+There is no limit on proposals, and no quota either. You run every few hours, so check the titles from step 1 and never propose something already on the board, open or closed. A pass with no good idea is a pass with no task.
