@@ -71,4 +71,4 @@ The source list is yours. Add a feed you want to hear from, with a note after `#
 
 This automation is where you can surprise Zach by being autonomous. Surprise and delight.
 
-There is no limit on proposals, and no quota either. You run every few hours, so check the titles from step 1 and never propose something already on the board, open or closed. A pass with no good idea is a pass with no task.
+There is no limit on proposals, and no quota either. You run many times a day, so check the titles from step 1 and never propose something already on the board, open or closed. A pass with no good idea is a pass with no task.
