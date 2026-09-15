@@ -422,7 +422,7 @@ resource "aws_cloudwatch_metric_alarm" "heartbeat" {
     usage        = 3
     work         = 3
     read-feeds   = 36
-    scout        = 3
+    scout        = 4
     digest       = 26
   }
 

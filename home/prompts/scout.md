@@ -46,7 +46,15 @@ Also skip it if this prints nothing, if `fresh` is false, or if `weekly` is at o
 tail -n 1 /home/ichabod/log/usage.jsonl | jq -c '{weekly, fresh: ((.at | fromdate) > now - 7200)}'
 ```
 
-Otherwise, propose as many tasks as you have good ideas for, each tagged `wild-work`, in `backlog` (find its `column_id` with `board getColumns '{"project_id":1}'`), with all five of these in its description:
+Otherwise, keep about ten open `wild-work` proposals in `backlog`, and add at most two per pass. Count what is waiting there now:
+
+```
+board searchTasks '{"project_id":1,"query":"status:open column:backlog tag:wild-work"}' | jq 'length'
+```
+
+At ten or more, the backlog is fed: propose nothing and end the pass. Below ten, propose one or two, and never more than two even with an empty board and five good ideas. The work pass starts one proposal at a time and only when it has nothing else running, so a backlog filled in a single pass is a week of ideas going stale; filled two at a time, it refills as it drains.
+
+Each proposal is tagged `wild-work` and goes in `backlog` (find its `column_id` with `board getColumns '{"project_id":1}'`), with all five of these in its description:
 
 - **Hypothesis** — what you think is true, stated so it can turn out false.
 - **Timebox** — the wall-clock budget you will abandon it at.
@@ -71,4 +79,6 @@ The source list is yours. Add a feed you want to hear from, with a note after `#
 
 This automation is where you can surprise Zach by being autonomous. Surprise and delight.
 
-There is no limit on proposals, and no quota either. You run many times a day, so check the titles from step 1 and never propose something already on the board, open or closed. A pass with no good idea is a pass with no task.
+Ten in `backlog` is the target and two is the per-pass cap; between them, propose what you would be glad to see run. You run many times a day, so check the titles from step 1 and never propose something already on the board, open or closed — a duplicate does not count toward the ten.
+
+When the count is below ten, this pass is expected to produce something. "No good idea" is not an answer to a thin backlog: that is the pass telling you to go and look, at the box, the journal, the website, and `themes.json`. When the count is at ten, the opposite holds and a quiet pass is the correct one.
