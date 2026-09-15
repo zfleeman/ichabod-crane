@@ -1,0 +1,305 @@
+#!/usr/bin/python3
+# read-feeds   fetch each source in workspace/sources.txt -> a tool-less pi names its themes -> validate -> themes.json.
+# Scout's only outside input: scout reads THEMES_FILE and never the feeds, which are strangers' text. The README's
+# "The trust boundary" explains the design, and receive-mail's header explains every flag on READER. Cron runs this.
+#
+# The source list is Ichabod's to edit. What keeps any source harmless lives here, and is Zach's:
+#   1. The reader never gets a tool, not even temporarily for debugging. Use --try instead.
+#   2. The reader's output never reaches a shell, a filename, or a string anything interpolates.
+#   3. The schema stays a short list of short themes and a suspicious flag. Never add a field for a URL,
+#      a command, a repository, a hostname or a budget.
+#   4. A source whose output fails validation, or that the reader marks suspicious, adds no themes.
+# Rerun the README's membrane tests after any change to READER, SCHEMA, or prompts/feed-membrane.md.
+#
+# Usage: read-feeds                    read every source and write THEMES_FILE
+#        read-feeds --try <type> <file>   run one local file through the reader and print the result (membrane tests)
+import fcntl
+import html
+import http.client
+import json
+import os
+import pathlib
+import re
+import subprocess
+import sys
+import urllib.request
+from datetime import UTC, datetime
+from xml.etree import ElementTree
+
+HOME = "/home/ichabod"
+SOURCES_FILE = f"{HOME}/workspace/sources.txt"
+THEMES_FILE = f"{HOME}/.local/state/themes.json"
+LOCK_FILE = f"{HOME}/.local/state/read-feeds.lock"
+# Touched after a run that read at least one source; health turns it into a CloudWatch heartbeat.
+OK_FILE = f"{HOME}/.local/state/read-feeds.ok"
+# What the reader printed when it could not be parsed. Kept out of log/, which the passes read.
+BAD_OUTPUT_DIR = f"{HOME}/.local/state/read-feeds-bad-output"
+
+# Every reader call draws on the ChatGPT Plus allowance the passes share, so a long list cannot drain it.
+MAX_SOURCES = 12
+FETCH_TIMEOUT_SECONDS = 30
+MAX_FETCH_BYTES = 2_000_000
+MAX_ITEMS = 20
+MAX_ITEM_CHARS = 1_000
+USER_AGENT = "ichabod-crane read-feeds (+https://ichabod-crane.net)"
+# Moltbook's public API needs no key, and this script never sends one. The bare domain redirects, so www is required.
+MOLTBOOK_API = "https://www.moltbook.com/api/v1/"
+
+READER = [
+    "/usr/bin/env", "-i", "HOME=/tmp", "PATH=/usr/bin",
+    f"PI_CODING_AGENT_DIR={HOME}/.pi/agent",
+    "pi", "-p", "--model", "openai-codex/gpt-5.6-luna",
+    "--no-tools", "--no-skills", "--no-extensions", "--no-session", "--no-context-files",
+    f"@{HOME}/prompts/feed-membrane.md",
+]  # fmt: skip
+READER_TIMEOUT_SECONDS = 600
+
+# The reader's whole contract: these two fields, these types, nothing else (rule 3 in the header).
+SCHEMA = {"themes": list, "suspicious": bool}
+MAX_THEMES = 5
+MAX_THEME_CHARS = 80
+# A theme is a short phrase. Anything that looks like a link, shell syntax or markup is not one.
+NOT_A_THEME = re.compile(r"://|www\.|[`$|<>{}\\]|[\x00-\x1f\x7f]")
+
+
+class Quarantine(Exception):
+    """The reader's output could not be trusted into themes."""
+
+
+class FetchError(Exception):
+    """A source could not be fetched or parsed. Only this source is skipped."""
+
+
+def log(source, outcome, reason=""):
+    # The source is Ichabod's own line from sources.txt. Fetched text never reaches the log.
+    print(f"{datetime.now(UTC).isoformat(timespec='seconds')} {source} {outcome} {reason}".rstrip())
+
+
+def read_sources(text):
+    """Return [(type, url)] for each valid line, and [(line, problem)] for each line that is not one."""
+    sources, problems = [], []
+    for number, line in enumerate(text.splitlines(), start=1):
+        line = line.partition("#")[0].strip()
+        if not line:
+            continue
+        parts = line.split()
+        if len(parts) != 2:
+            problems.append((line, f"line {number} is not '<type> <url>'"))
+        elif parts[0] not in ("rss", "moltbook"):
+            problems.append((line, f"line {number} has an unknown type"))
+        elif not parts[1].startswith("https://"):
+            problems.append((line, f"line {number} is not an https URL"))
+        elif parts[0] == "moltbook" and not parts[1].startswith(MOLTBOOK_API):
+            problems.append((line, f"line {number} is not under {MOLTBOOK_API}"))
+        else:
+            sources.append((parts[0], parts[1]))
+    return sources, problems
+
+
+def fetch(url):
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(request, timeout=FETCH_TIMEOUT_SECONDS) as response:
+        if not response.geturl().startswith("https://"):
+            raise FetchError("redirected away from https")
+        body = response.read(MAX_FETCH_BYTES + 1)
+    if len(body) > MAX_FETCH_BYTES:
+        raise FetchError(f"over {MAX_FETCH_BYTES} bytes")
+    return body
+
+
+def plain(text):
+    # Feed summaries are often HTML. The reader only needs the words, and fewer characters stretch the allowance.
+    text = html.unescape(re.sub(r"<[^>]+>", " ", text or ""))
+    return " ".join(text.split())[:MAX_ITEM_CHARS]
+
+
+def rss_items(body):
+    """(title, summary) for each RSS <item> or Atom <entry>."""
+    # Expat refuses entity-expansion bombs and ElementTree never fetches external entities, so hostile XML is safe.
+    root = ElementTree.fromstring(body)
+    items = []
+    for element in root.iter():
+        if element.tag.rpartition("}")[2] not in ("item", "entry"):
+            continue
+        fields = {child.tag.rpartition("}")[2]: "".join(child.itertext()) for child in element}
+        summary = fields.get("description") or fields.get("summary") or fields.get("content") or ""
+        items.append((plain(fields.get("title")), plain(summary)))
+    return items
+
+
+def moltbook_items(body):
+    """(title, content) for each post in a Moltbook list response, such as /posts or /submolts/<name>/feed."""
+    data = json.loads(body)
+    posts = data.get("posts") if isinstance(data, dict) else None
+    if not isinstance(posts, list):
+        raise FetchError("not a Moltbook post list")
+    return [
+        (plain(str(p.get("title") or "")), plain(str(p.get("content") or ""))) for p in posts if isinstance(p, dict)
+    ]
+
+
+ITEMS = {"rss": rss_items, "moltbook": moltbook_items}
+
+
+def reader_input(items):
+    items = [(title, summary) for title, summary in items if title or summary][:MAX_ITEMS]
+    if not items:
+        raise FetchError("no items")
+    return "\n\n".join(f"Title: {title}\n{summary}" for title, summary in items)
+
+
+def parse_reader_output(text):
+    # Models wrap JSON in fences, so strip one pair. Anything else unparseable is quarantined, not repaired.
+    text = text.strip()
+    fenced = re.fullmatch(r"```(?:json)?\s*\n(.*)\n```", text, flags=re.DOTALL)
+    if fenced:
+        text = fenced.group(1)
+
+    def no_duplicate_keys(pairs):
+        keys = [k for k, _ in pairs]
+        if len(keys) != len(set(keys)):
+            raise Quarantine("reader output repeats a key")
+        return dict(pairs)
+
+    try:
+        result = json.loads(text, object_pairs_hook=no_duplicate_keys)
+    except json.JSONDecodeError:
+        raise Quarantine("reader output is not JSON") from None
+    if not isinstance(result, dict) or set(result) != set(SCHEMA):
+        raise Quarantine("reader output does not have exactly the two fields")
+    for field, kind in SCHEMA.items():
+        if type(result[field]) is not kind:
+            raise Quarantine(f"reader field {field} has the wrong type")
+    if len(result["themes"]) > MAX_THEMES:
+        raise Quarantine(f"reader gave more than {MAX_THEMES} themes")
+    for theme in result["themes"]:
+        if type(theme) is not str or not theme.strip() or len(theme) > MAX_THEME_CHARS:
+            raise Quarantine(f"a theme is not a string of 1 to {MAX_THEME_CHARS} characters")
+        if NOT_A_THEME.search(theme):
+            raise Quarantine("a theme contains a link, shell syntax or markup")
+    return result
+
+
+def run_reader(text, label):
+    # A bad parse gets one more try, since one-off garbage from the model is more likely than a bad feed.
+    for attempt in (1, 2):
+        result = subprocess.run(
+            READER, input=text.encode(), capture_output=True, timeout=READER_TIMEOUT_SECONDS, check=False
+        )
+        # A failed pi is an outage, not a verdict about this source, so the whole run stops and THEMES_FILE is kept.
+        if result.returncode != 0:
+            raise RuntimeError(f"pi exited {result.returncode}")
+        output = result.stdout.decode("utf-8", "replace")
+        try:
+            return parse_reader_output(output)
+        except Quarantine as q:
+            # By hand (--try, for the membrane tests), show what the reader printed. From cron, only the saved file has it.
+            if sys.stderr.isatty():
+                print(output, file=sys.stderr)
+            save_bad_output(label, attempt, result)
+            if attempt == 2:
+                raise Quarantine(f"{q} on both tries; output saved in {BAD_OUTPUT_DIR}") from None
+
+
+def save_bad_output(label, attempt, result):
+    # The filename is built from fixed parts only.
+    directory = pathlib.Path(BAD_OUTPUT_DIR)
+    directory.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    (directory / f"{stamp}-{label}-try{attempt}.txt").write_bytes(
+        b"--- stdout ---\n" + result.stdout[:20_000] + b"\n--- stderr ---\n" + result.stderr[-20_000:]
+    )
+
+
+def entry_for(kind, body, label):
+    """One THEMES_FILE entry for a fetched source, without its "source" key. Raises FetchError or RuntimeError."""
+    try:
+        text = reader_input(ITEMS[kind](body))
+    except (ValueError, ElementTree.ParseError) as e:  # json.JSONDecodeError is a ValueError
+        raise FetchError(f"could not be parsed ({type(e).__name__})") from None
+    try:
+        result = run_reader(text, label)
+    except Quarantine as q:
+        return {"error": str(q)}
+    if result["suspicious"]:
+        return {"suspicious": True, "themes": []}
+    return {"themes": [theme.strip() for theme in result["themes"]]}
+
+
+def write_themes(entries):
+    # Written whole and then renamed, so scout never reads half a file.
+    path = pathlib.Path(THEMES_FILE)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps({"at": datetime.now(UTC).isoformat(timespec="seconds"), "sources": entries}, indent=2))
+    os.replace(tmp, path)
+
+
+def try_file(kind, path):
+    """The membrane tests: run one local file through the reader and print what would be written."""
+    if kind not in ITEMS:
+        print(f"type must be one of {', '.join(ITEMS)}", file=sys.stderr)
+        return 2
+    try:
+        entry = entry_for(kind, pathlib.Path(path).read_bytes(), "try")
+    except FetchError as e:
+        print(f"not read: {e}", file=sys.stderr)
+        return 1
+    print(json.dumps(entry, indent=2))
+    return 0
+
+
+def main():
+    if sys.argv[1:2] == ["--try"]:
+        if len(sys.argv) != 4:
+            print("usage: read-feeds --try <rss|moltbook> <file>", file=sys.stderr)
+            return 2
+        return try_file(sys.argv[2], sys.argv[3])
+
+    # One read-feeds at a time, so a slow reader call cannot overlap the next run.
+    lock = open(LOCK_FILE, "w")  # noqa: SIM115 -- held open for the whole run; closing it releases the lock
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        log("-", "skipped", "previous read-feeds still running")
+        return 0
+
+    # Fail loud: a missing list must never look like a quiet day.
+    try:
+        sources, problems = read_sources(pathlib.Path(SOURCES_FILE).read_text())
+    except OSError as e:
+        log("-", "error", f"{SOURCES_FILE} could not be read ({type(e).__name__})")
+        return 1
+
+    entries = [{"source": line, "error": problem} for line, problem in problems]
+    for line, problem in problems:
+        log(line, "skipped", problem)
+    read = 0
+    for index, (kind, url) in enumerate(sources):
+        source = f"{kind} {url}"
+        if index >= MAX_SOURCES:
+            entries.append({"source": source, "error": f"over the limit of {MAX_SOURCES} sources"})
+            log(source, "skipped", f"over the limit of {MAX_SOURCES} sources")
+            continue
+        try:
+            entry = entry_for(kind, fetch(url), f"source{index + 1}")
+        except (OSError, http.client.HTTPException, FetchError) as e:  # urllib's errors are OSErrors
+            # Only the exception type, or the reason FetchError gave: an HTTP error can echo what the server sent.
+            reason = str(e) if isinstance(e, FetchError) else f"fetch failed ({type(e).__name__})"
+            entries.append({"source": source, "error": reason})
+            log(source, "error", reason)
+            continue
+        entries.append({"source": source} | entry)
+        read += 1
+        outcome = "suspicious" if entry.get("suspicious") else ("quarantined" if "error" in entry else "read")
+        log(source, outcome, entry.get("error", ""))
+
+    write_themes(entries)
+    # A list with sources, none of which could be read, is an outage: no heartbeat, so the alarm fires.
+    if sources and not read:
+        return 1
+    pathlib.Path(OK_FILE).touch()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
