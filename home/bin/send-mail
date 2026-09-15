@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 # send-mail [--in-reply-to <message-id>] <subject>   send one email to Zach, with the body on stdin.
 # The only way mail leaves the box. Its rules live here in code, not in a prompt, so no email or card can
-# widen them (docs/RUNTIME.md, "Mail"). Standard library only.
+# widen them. Standard library only.
 import argparse
 import email.utils
 import fcntl

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # run <name> <model>   run prompts/<name>.md under pi on <model>, with a lock and a timeout.
-# Cron runs this. docs/RUNTIME.md has the reasoning behind Pi's flags; the rest is explained inline.
+# Cron runs this, as ichabod. Never pass a prompt through `sudo -iu`: the login shell re-parses it and runs its backticks.
 set -euo pipefail
 # The model is an argument so each crontab line holds its pass's schedule and model together.
 name="$1"; model="$2"
@@ -18,8 +18,11 @@ day="$(date +%F)"; out="/home/ichabod/log/$day/$(date +%H%M)-$name.jsonl"; err="
 mkdir -p "/home/ichabod/log/$day" /home/ichabod/workspace/own-skills
 
 # Pi has no working-directory flag; it reads AGENTS.md from the directory it starts in.
+# It also reads one from every parent directory, so a /home/ichabod/AGENTS.md would silently join every preamble.
 cd /home/ichabod/workspace
 
+# --mode json makes the log the event stream, with token counts and every tool call; -p prints only the last message.
+# --no-session because that log already records the run. --session-dir would allow reopening one, at a second copy.
 # --no-skills plus --skill loads exactly Zach's skills and Ichabod's own, without depending on project trust.
 # --no-extensions because an extension can add tools and preamble; -e still loads pi-web-access, root-owned in /usr/lib.
 # Re-check --tools after every Pi or pi-web-access upgrade: a tool can keep its name and change what it does.

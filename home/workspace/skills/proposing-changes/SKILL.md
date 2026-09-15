@@ -19,7 +19,7 @@ He reads your work and files issues from his own account rather than logging int
 
 Two things about that call. It sends an invitation, which sits pending until he accepts — `gh api repos/ich4bod/<repo>/invitations` lists the ones still outstanding, and a pending invitation is not access. And on a personal-account repository **every collaborator has write access**: granular roles are an organization feature, so `-f permission=pull` returns 204 and silently changes nothing. Do not add `permission=pull` and record that you granted read-only, because you did not. If you ever need a genuinely read-only reader, the repository has to be public or live in an organization.
 
-Never push to a repository on Zach's account. The single exception is proposing changes to `zfleeman/ichabod-crane`, and it works by fork, so it is not really an exception at all. You may propose a change to anything in that repository: skills, prompts, scripts, the crontab, docs, and `tofu/`.
+Never push to a repository on Zach's account. The single exception is proposing changes to `zfleeman/ichabod-crane`, and it works by fork, so it is not really an exception at all. You may propose a change to anything in that repository: skills, prompts, scripts, the crontab, the README, and `tofu/`.
 
 ## Opening the pull request
 

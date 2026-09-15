@@ -1,0 +1,211 @@
+#!/usr/bin/env bash
+# Install everything the box needs on a fresh Ubuntu 24.04 instance. `make build-host` runs this from Zach's laptop.
+#
+# From the laptop it sends itself over SSM and waits. On the box (--on-box) it runs as root, and every step
+# checks before it changes anything, so it is safe to re-run after changing a pin. Re-running also upgrades
+# packages, which can restart Docker and the containers on it.
+# Usage: scripts/build-host
+set -euo pipefail
+
+# Version pins. Change one here and re-run; Ubuntu's own nodejs is older than Pi supports.
+NODE_VERSION=24.21.0-1nodesource1
+PI_VERSION=0.85.1
+PI_WEB_ACCESS_VERSION=0.29.0
+
+# --- Laptop side: ship this file over SSM, like scripts/deploy ---------------------------------------------------
+
+if [ "${1:-}" != --on-box ]; then
+  export AWS_PROFILE="${AWS_PROFILE:-ZACH-ROOT}"
+  export AWS_PAGER=""
+  cd "$(dirname "$0")/.."
+
+  instance="$(tofu -chdir=tofu output -raw instance_id)"
+  payload="$(base64 < scripts/build-host | tr -d '\n')"
+  tmp="$(mktemp -d)"
+  trap 'rm -rf "$tmp"' EXIT
+
+  # Kept free of quotes and backslashes so it needs no JSON escaping. The script runs from a file, not stdin,
+  # so apt and ssh-keygen cannot read the rest of the script as their input.
+  remote="f=\$(mktemp) && echo $payload | base64 -d > \$f && bash \$f --on-box; rc=\$?; rm -f \$f; exit \$rc"
+  printf '{"commands":["%s"],"executionTimeout":["3600"]}' "$remote" > "$tmp/params.json"
+
+  command_id="$(aws ssm send-command --instance-ids "$instance" \
+    --document-name AWS-RunShellScript \
+    --parameters "file://$tmp/params.json" \
+    --query Command.CommandId --output text)"
+  echo "building host as $command_id, this takes several minutes..."
+
+  status=Pending
+  for _ in $(seq 360); do
+    status="$(aws ssm get-command-invocation --command-id "$command_id" --instance-id "$instance" \
+      --query Status --output text 2>/dev/null || echo Pending)"
+    case "$status" in InProgress | Pending | Delayed) sleep 5 ;; *) break ;; esac
+  done
+
+  aws ssm get-command-invocation --command-id "$command_id" --instance-id "$instance" \
+    --query '[StandardOutputContent,StandardErrorContent]' --output text
+
+  [ "$status" = "Success" ] || { echo "build-host failed: $status" >&2; exit 1; }
+  exit 0
+fi
+
+# --- Box side ------------------------------------------------------------------------------------------------------
+
+export DEBIAN_FRONTEND=noninteractive
+home=/home/ichabod
+# SSM keeps only the first 24,000 characters of output, so apt's chatter goes here and failures print its tail.
+log=/var/log/ichabod-build-host.log
+
+step() { echo "== $*"; }
+quiet() {
+  "$@" >> "$log" 2>&1 || { echo "failed: $*" >&2; tail -n 30 "$log" >&2; exit 1; }
+}
+as_ichabod() { sudo -u ichabod -H "$@"; }
+
+step "packages"
+quiet apt-get update
+quiet apt-get upgrade -y
+quiet apt-get install -y ca-certificates curl git jq unzip build-essential python3-dkim python3-dnspython
+
+step "apt repositories for Docker, the GitHub CLI and NodeSource"
+# These paths match what each vendor's own instructions write. apt refuses two sources for one URI with different
+# keys, so moving a file here breaks apt-get update on a box built before the move.
+install -d -m 0755 /etc/apt/keyrings
+quiet curl -fsSL -o /etc/apt/keyrings/docker.asc https://download.docker.com/linux/ubuntu/gpg
+quiet curl -fsSL -o /etc/apt/keyrings/githubcli-archive-keyring.gpg https://cli.github.com/packages/githubcli-archive-keyring.gpg
+quiet curl -fsSL -o /tmp/nodesource.key https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key
+quiet gpg --dearmor --yes -o /usr/share/keyrings/nodesource.gpg /tmp/nodesource.key
+cat > /etc/apt/sources.list.d/docker.sources <<'EOF'
+Types: deb
+URIs: https://download.docker.com/linux/ubuntu
+Suites: noble
+Components: stable
+Signed-By: /etc/apt/keyrings/docker.asc
+EOF
+echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main' \
+  > /etc/apt/sources.list.d/github-cli.list
+cat > /etc/apt/sources.list.d/nodesource.sources <<'EOF'
+Types: deb
+URIs: https://deb.nodesource.com/node_24.x
+Suites: nodistro
+Components: main
+Architectures: amd64
+Signed-By: /usr/share/keyrings/nodesource.gpg
+EOF
+quiet apt-get update
+
+step "Docker, gh, and Node $NODE_VERSION"
+quiet apt-get install -y --allow-downgrades --allow-change-held-packages \
+  docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin gh "nodejs=$NODE_VERSION"
+quiet apt-mark hold nodejs
+
+step "the ichabod user"
+# Name the shell: useradd defaults to dash, which never reads ~/.bashrc, so installer PATH lines never load.
+id ichabod > /dev/null 2>&1 || useradd --create-home --shell /bin/bash ichabod
+# Created if missing and never re-owned, like scripts/install-home does for the directories it makes.
+for d in apps platform backups src .ssh; do
+  [ -d "$home/$d" ] || install -d -o ichabod -g ichabod -m 0755 "$home/$d"
+done
+chmod 0700 "$home/.ssh"
+
+step "swap"
+# An out-of-memory fuse, not working memory.
+if ! swapon --show=NAME --noheadings | grep -qx /swapfile; then
+  [ -f /swapfile ] || { fallocate -l 4G /swapfile && chmod 600 /swapfile && quiet mkswap /swapfile; }
+  swapon /swapfile
+fi
+grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+
+step "no SSH"
+# Both units: on 24.04 sshd is socket-activated, so disabling only the service leaves port 22 listening.
+quiet systemctl disable --now ssh.service ssh.socket
+
+step "CloudWatch agent and AWS CLI"
+dpkg -s amazon-cloudwatch-agent > /dev/null 2>&1 || {
+  quiet curl -fsSL -o /tmp/amazon-cloudwatch-agent.deb \
+    https://amazoncloudwatch-agent.s3.amazonaws.com/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb
+  quiet dpkg -i /tmp/amazon-cloudwatch-agent.deb
+}
+# The alarms in tofu/main.tf have InstanceId as their only dimension. Without the aggregation, the agent's metrics
+# also carry path, device and fstype, and never match them.
+cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<'EOF'
+{
+  "metrics": {
+    "namespace": "CWAgent",
+    "append_dimensions": { "InstanceId": "${aws:InstanceId}" },
+    "aggregation_dimensions": [["InstanceId"]],
+    "metrics_collected": {
+      "mem": { "measurement": ["used_percent"] },
+      "disk": { "measurement": ["used_percent"], "resources": ["/"] }
+    }
+  }
+}
+EOF
+quiet /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s \
+  -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+# health publishes heartbeats with it, using the instance role.
+command -v aws > /dev/null || {
+  quiet curl -fsSL -o /tmp/awscliv2.zip https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip
+  quiet unzip -o -q /tmp/awscliv2.zip -d /tmp
+  quiet /tmp/aws/install
+}
+
+step "Docker log limits and the docker group"
+# Membership in docker is root on this host, and that is intended. ssm-user reaches Docker only through sudo.
+daemon='{ "log-driver": "json-file", "log-opts": { "max-size": "10m", "max-file": "3" } }'
+if [ "$(cat /etc/docker/daemon.json 2> /dev/null)" != "$daemon" ]; then
+  echo "$daemon" > /etc/docker/daemon.json
+  quiet systemctl restart docker
+fi
+quiet usermod -aG docker ichabod
+
+step "Pi $PI_VERSION and pi-web-access $PI_WEB_ACCESS_VERSION"
+# Installed as root into /usr, so Ichabod cannot swap the pi the membrane runs. receive-mail starts it with
+# PATH=/usr/bin only, and run loads pi-web-access from /usr/lib/node_modules.
+quiet npm install -g "@earendil-works/pi-coding-agent@$PI_VERSION" "pi-web-access@$PI_WEB_ACCESS_VERSION"
+
+step "ichabod's SSH key and git"
+# One key pushes and signs. It has no passphrase because cron uses it, and a second key in the same
+# directory would isolate nothing.
+[ -f "$home/.ssh/id_ed25519" ] || as_ichabod ssh-keygen -q -t ed25519 -N '' -C ichabod -f "$home/.ssh/id_ed25519"
+# GitHub's host keys come from its API over HTTPS, so the first unattended push does not stop at a prompt.
+if ! grep -q '^github.com ' "$home/.ssh/known_hosts" 2> /dev/null; then
+  keys="$(curl -fsSL https://api.github.com/meta | jq -r '.ssh_keys[] | "github.com " + .')"
+  as_ichabod tee -a "$home/.ssh/known_hosts" <<< "$keys" > /dev/null
+fi
+as_ichabod git config --global user.name 'Ichabod Crane'
+# GitHub marks a commit Verified only when this is a verified email on ich4bod.
+as_ichabod git config --global user.email ichabod@ichabod-crane.net
+as_ichabod git config --global init.defaultBranch main
+as_ichabod git config --global gpg.format ssh
+as_ichabod git config --global user.signingkey "$home/.ssh/id_ed25519.pub"
+as_ichabod git config --global commit.gpgsign true
+as_ichabod git config --global tag.gpgsign true
+# Lets git log --show-signature verify Ichabod's own signatures on the box.
+as_ichabod tee "$home/.ssh/allowed_signers" <<< "ichabod@ichabod-crane.net namespaces=\"git\" $(cat "$home/.ssh/id_ed25519.pub")" > /dev/null
+as_ichabod git config --global gpg.ssh.allowedSignersFile "$home/.ssh/allowed_signers"
+# Left at https, gh repo clone works and the first git push fails asking for a username.
+quiet as_ichabod gh config set git_protocol ssh
+
+# --- Checks: ask the live system, not the config -------------------------------------------------------------------
+
+step "checks"
+fail() { echo "CHECK FAILED: $*" >&2; exit 1; }
+[ -z "$(ss -Hlnt 'sport = :22')" ] || fail "something is listening on port 22"
+[ "$(env -i PATH=/usr/bin pi --version)" = "$PI_VERSION" ] || fail "pi on PATH=/usr/bin is not $PI_VERSION"
+[ "$(as_ichabod bash -lc 'command -v pi')" = /usr/bin/pi ] || fail "ichabod's login shell does not find /usr/bin/pi"
+[ "$(stat -c %U "$(readlink -f /usr/bin/pi)")" = root ] || fail "pi is not owned by root"
+[ -d /usr/lib/node_modules/pi-web-access ] || fail "pi-web-access is not in /usr/lib/node_modules"
+# Not a formality: this confirms the root-equivalent Docker authority ichabod is meant to have.
+quiet as_ichabod docker run --rm hello-world
+quiet aws --version
+systemctl is-active --quiet amazon-cloudwatch-agent || fail "the CloudWatch agent is not running"
+echo "all checks passed"
+
+echo
+echo "ichabod's public key. Add it to ich4bod twice, as an Authentication Key and as a Signing Key:"
+cat "$home/.ssh/id_ed25519.pub"
+if [ -f /var/run/reboot-required ]; then
+  echo
+  echo "A reboot is needed to finish the upgrade: make stop start"
+fi

@@ -29,7 +29,7 @@ check: ## Formatting and validation
 test: ## Lint and unit test the scripts in home/bin
 	ruff check
 	ruff format --check
-	uvx --from shellcheck-py shellcheck -e SC1091 home/bin/run home/bin/board home/bin/usage home/bin/health home/bin/set-secret scripts/deploy scripts/install-home
+	uvx --from shellcheck-py shellcheck -e SC1091 home/bin/run home/bin/board home/bin/usage home/bin/health home/bin/set-secret scripts/deploy scripts/install-home scripts/build-host
 	uv run --group dev pytest -q
 
 plan: ## Show what would change
@@ -84,6 +84,11 @@ start: ## Start the instance and wait until SSM answers
 	  done; \
 	  echo "SSM never came online; check the console in the EC2 web UI." >&2; exit 1
 
+# Installs packages, Docker, Pi and the CloudWatch agent on the box, then checks the result. Safe to re-run
+# after changing a pin at the top of scripts/build-host.
+build-host: ## Install and check everything the host needs (re-runnable)
+	scripts/build-host
+
 # Ships the committed home/ to /home/ichabod. Refuses when Ichabod changed a shipped file on the
 # box since the last deploy; FORCE=1 overwrites. scripts/install-home has the rules.
 deploy: ## Install the committed home/ on the box (FORCE=1 overwrites drift)
@@ -110,4 +115,4 @@ alarms: ## Current state of every ichabod alarm
 	aws cloudwatch describe-alarms --alarm-name-prefix ichabod- \
 	  --query 'MetricAlarms[].[AlarmName,StateValue]' --output table
 
-.PHONY: help init check test plan apply shell ichabod status stop start deploy cron secret ip alarms
+.PHONY: help init check test plan apply shell ichabod status stop start build-host deploy cron secret ip alarms
