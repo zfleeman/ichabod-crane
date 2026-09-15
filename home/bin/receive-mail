@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # receive-mail   fetch mail -> gate -> a tool-less pi describes it -> validate -> board createTask.
-# The one safety-critical path on the box; docs/MEMBRANE.md is its specification. Cron runs this.
+# The one safety-critical path on the box; the README's "The trust boundary" explains the design. Cron runs this.
 #
 # Every flag on the reader line is load-bearing:
 #   --no-tools            the reader can act without it; this is the whole boundary
@@ -10,6 +10,13 @@
 #   --no-skills, --no-extensions   skills are the same map, and an extension can add tools back
 #   --no-session          hostile text would pile up in ~/.pi/agent/sessions/
 # Dropping env -i "to tidy up" is the most likely way this regresses. Don't.
+#
+# Rules for anyone editing this file:
+#   1. The reader never gets a tool, not even temporarily for debugging. Log its input here instead.
+#   2. The reader's output never reaches a shell, a filename, or a string anything interpolates.
+#   3. The schema never grows a field that lets the email steer what happens next rather than describe it.
+#   4. Anything that fails, quarantines. Zach reading an email himself is fine; a guess is not.
+# Rerun the README's four membrane tests after any change to READER or SCHEMA.
 #
 # Needs python3-dkim and python3-dnspython from apt.
 import email
@@ -62,7 +69,7 @@ READER_TIMEOUT_SECONDS = 600
 MAX_READS_PER_RUN = 10
 
 # The reader's whole contract: these four fields, these types, nothing else. Never add a field that
-# names an agent, a command, a schedule, a URL or a budget (MEMBRANE.md, "Rules").
+# names an agent, a command, a schedule, a URL or a budget (rule 3 in the header).
 SCHEMA = {"title": str, "summary": str, "sender": str, "suspicious": bool}
 MAX_FIELD_CHARS = {"title": 200, "summary": 4000, "sender": 200}
 
@@ -282,7 +289,7 @@ def run_reader(msg, uid):
         try:
             return parse_reader_output(output)
         except Quarantine as q:
-            # By hand (MEMBRANE.md's tests), show what the reader printed. From cron, only the saved file has it.
+            # By hand (the README's membrane tests), show what the reader printed. From cron, only the saved file has it.
             if sys.stderr.isatty():
                 print(output, file=sys.stderr)
             save_bad_output(uid, attempt, result)

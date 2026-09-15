@@ -117,6 +117,8 @@ resource "aws_iam_instance_profile" "ichabod" {
 
 # --- Instance ----------------------------------------------------------------
 
+# 8 GiB is for compilers, Docker layers and headless Chromium, not the sites; a medium runs out of memory on builds.
+# Resize only on evidence, such as memory repeatedly above 85% or builds blocked on CPU credits. Prune first.
 resource "aws_instance" "ichabod" {
   ami           = var.ami_id
   instance_type = "t3a.large"
@@ -129,7 +131,8 @@ resource "aws_instance" "ichabod" {
 
   # The Elastic IP below is the public address; no auto-assigned one is wanted.
   associate_public_ip_address = false
-  disable_api_termination     = true
+  # Makes `tofu destroy` fail. Set it false and apply once before an intentional teardown.
+  disable_api_termination = true
 
   # Associating the Elastic IP makes AWS report the interface as having a public
   # IP association, so this attribute reads back as true no matter what is set
@@ -143,12 +146,14 @@ resource "aws_instance" "ichabod" {
     cpu_credits = "standard"
   }
 
+  # IMDSv2 with a hop limit of 1: a container on Docker's bridge network cannot reach the role's credentials.
   metadata_options {
     http_endpoint               = "enabled"
     http_tokens                 = "required"
     http_put_response_hop_limit = 1
   }
 
+  # gp3 gets the same baseline IOPS at any size and grows while running, so 100 GiB is reversible. Docker fills it.
   root_block_device {
     volume_type           = "gp3"
     volume_size           = 100
@@ -332,6 +337,7 @@ resource "aws_cloudwatch_metric_alarm" "status_check_failed" {
 }
 
 # Standard credit mode means a drained balance throttles the box to its baseline.
+# A fresh host trips this during scripts/build-host, and it clears once the box idles.
 resource "aws_cloudwatch_metric_alarm" "cpu_credits_low" {
   alarm_name          = "ichabod-cpu-credit-balance-low"
   alarm_description   = "CPU credits nearly exhausted; the host is about to be throttled."
@@ -360,9 +366,8 @@ resource "aws_cloudwatch_metric_alarm" "ebs_byte_balance_low" {
   alarm_actions       = [aws_sns_topic.alerts.arn]
 }
 
-# The three CWAgent alarms sit in INSUFFICIENT_DATA until the host installs the
-# agent (docs/ICHABOD-GUIDE.md, section 5). Configure it to collect only "/" and
-# to aggregate on InstanceId, or these dimensions will not match.
+# The three CWAgent alarms sit in INSUFFICIENT_DATA until scripts/build-host installs
+# the agent, which it configures to collect only "/" and aggregate on InstanceId.
 resource "aws_cloudwatch_metric_alarm" "memory_high" {
   alarm_name          = "ichabod-memory-high"
   alarm_description   = "Memory above 85 percent."

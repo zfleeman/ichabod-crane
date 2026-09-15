@@ -1,6 +1,13 @@
 # Traefik, the only thing on the box that owns ports 80 and 443. make deploy installs this at
 # /home/ichabod/platform/traefik/compose.yaml; start it there with `docker compose up -d`.
-# docs/ICHABOD-GUIDE.md, section 7, explains each piece. Update the version deliberately: it holds the Docker socket.
+# Traefik builds its routes from container labels, so a new site is one compose file and no edit here.
+# Update the version deliberately, and never let an application share this compose project: it holds the Docker socket.
+#
+# Three things that look broken and are not:
+#   - A healthy Traefik logs nothing. The log level defaults to ERROR, and ACME failures do appear.
+#   - The first request to a new hostname fails with "unable to get local issuer certificate" while issuance runs.
+#   - The ACME account is pinned on first issuance. Changing the email below means deleting acme.json and re-issuing.
+# Back up the letsencrypt volume, or expect to re-issue every certificate after a rebuild.
 
 name: ichabod-proxy
 

@@ -18,6 +18,8 @@ Deploy with Docker Compose and Traefik labels. `/home/ichabod/templates/app/comp
 - Keep the template's CPU and memory limits unless the card says otherwise and says why. They are a blast radius, not a budget, so raise them from a measured peak recorded on the card, never from an estimate.
 - Traefik labels for routing, on the external `ichabod-proxy` network. Traefik terminates TLS for `*.ichabod-crane.net`, so a new hostname needs no certificate work.
 - A healthcheck the container can actually fail.
+- Push source before or right after deploying. GitHub is the durable history; the local image is replaceable.
+- A stateful application's README names its volume, backup command, restore command, retention, and last tested restore. An EBS snapshot captures bytes, not a consistent database.
 
 Traefik itself, under `/home/ichabod/platform/`, is deliberately unbounded. Do not put a limit on it without a card carrying a measured peak.
 

@@ -1,5 +1,5 @@
 # Only for linting and testing the Python scripts in home/bin. Nothing here is installed on the box,
-# which gets python3-dkim and python3-dnspython from apt (docs/ICHABOD-GUIDE.md, section 5).
+# which gets python3-dkim and python3-dnspython from apt (scripts/build-host).
 [project]
 name = "ichabod-crane"
 version = "0"

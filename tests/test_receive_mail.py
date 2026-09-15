@@ -253,7 +253,7 @@ def test_env_keeps_quotes_that_are_part_of_the_value(tmp_path, monkeypatch):
 
 
 def test_reader_starts_with_an_empty_environment_and_no_tools():
-    # MEMBRANE.md: dropping env -i "to tidy up" is the most likely way this regresses.
+    # Dropping env -i "to tidy up" is the most likely way this regresses (receive-mail's header).
     assert rm.READER[:2] == ["/usr/bin/env", "-i"]
     pi = rm.READER.index("pi")
     assert [v.split("=")[0] for v in rm.READER[2:pi]] == ["HOME", "PATH", "PI_CODING_AGENT_DIR"]
