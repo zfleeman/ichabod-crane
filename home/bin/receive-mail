@@ -1,0 +1,451 @@
+#!/usr/bin/python3
+# receive-mail   fetch mail -> gate -> a tool-less pi describes it -> validate -> board createTask.
+# The one safety-critical path on the box; docs/MEMBRANE.md is its specification. Cron runs this.
+#
+# Every flag on the reader line is load-bearing:
+#   --no-tools            the reader can act without it; this is the whole boundary
+#   env -i                the reader would inherit GH_TOKEN, KANBOARD_TOKEN, MAIL_PASSWORD
+#   PI_CODING_AGENT_DIR   the ChatGPT login, the only credential the reader gets
+#   --no-context-files    AGENTS.md would hand the reader a map of Ichabod's authority
+#   --no-skills, --no-extensions   skills are the same map, and an extension can add tools back
+#   --no-session          hostile text would pile up in ~/.pi/agent/sessions/
+# Dropping env -i "to tidy up" is the most likely way this regresses. Don't.
+#
+# Needs python3-dkim and python3-dnspython from apt.
+import email
+import email.policy
+import fcntl
+import imaplib
+import json
+import pathlib
+import re
+import subprocess
+import sys
+import time
+from datetime import UTC, datetime
+
+import dkim
+import dns.exception
+import dns.resolver
+
+HOME = "/home/ichabod"
+IMAP_HOST = "imap.fastmail.com"
+IMAP_USER = "ichabod@ichabod-crane.net"
+ALLOWED_SENDERS = {"zfleeman@gmail.com"}
+# Measured from the signed Date header, so an old signed email re-sent today is still old.
+MAX_AGE_SECONDS = 48 * 3600
+MAX_CLOCK_SKEW_SECONDS = 3600
+MAX_BODY_CHARS = 100_000
+REJECTED_FOLDER = "Rejected"
+QUARANTINE_FOLDER = "Quarantine"
+ARCHIVE_FOLDER = "Archive"
+ENV_FILE = f"{HOME}/.config/ichabod/env"
+STATE_FILE = f"{HOME}/.local/state/receive-mail-seen.jsonl"
+LOCK_FILE = f"{HOME}/.local/state/receive-mail.lock"
+# Touched after a clean run; health turns it into a CloudWatch heartbeat.
+OK_FILE = f"{HOME}/.local/state/receive-mail.ok"
+# Touched when Zach is told the mailbox will not open, so a revoked password emails him once a day, not every run.
+LOGIN_ALERT_FILE = f"{HOME}/.local/state/receive-mail-login-alert"
+LOGIN_ALERT_EVERY_SECONDS = 24 * 3600
+# What the reader printed when it could not be parsed. Kept out of log/, which the passes read.
+BAD_OUTPUT_DIR = f"{HOME}/.local/state/receive-mail-bad-output"
+
+READER = [
+    "/usr/bin/env", "-i", "HOME=/tmp", "PATH=/usr/bin",
+    f"PI_CODING_AGENT_DIR={HOME}/.pi/agent",
+    "pi", "-p", "--model", "openai-codex/gpt-5.6-luna",
+    "--no-tools", "--no-skills", "--no-extensions", "--no-session", "--no-context-files",
+    f"@{HOME}/prompts/membrane.md",
+]  # fmt: skip
+READER_TIMEOUT_SECONDS = 600
+# Stop after this many reader calls in one run, so a backlog cannot drain the Plus quota the passes share.
+MAX_READS_PER_RUN = 10
+
+# The reader's whole contract: these four fields, these types, nothing else. Never add a field that
+# names an agent, a command, a schedule, a URL or a budget (MEMBRANE.md, "Rules").
+SCHEMA = {"title": str, "summary": str, "sender": str, "suspicious": bool}
+MAX_FIELD_CHARS = {"title": 200, "summary": 4000, "sender": 200}
+
+
+class Quarantine(Exception):
+    """The message passed the gate but the reader's output could not be trusted into a card."""
+
+
+class DnsUnavailable(Exception):
+    """DNS could not answer. An outage, not a verdict: the message stays unread and is retried next run."""
+
+
+def log(uid, outcome, reason=""):
+    # Fixed strings only. Hostile text stays out of log/, which the passes read.
+    print(f"{datetime.now(UTC).isoformat(timespec='seconds')} uid={uid} {outcome} {reason}".rstrip())
+
+
+def tell_zach(subject, body):
+    # send-mail is the only way mail leaves the box. If it fails, receive-mail fails, and its heartbeat stops.
+    subprocess.run([f"{HOME}/bin/send-mail", subject], input=body.encode(), check=True, timeout=120)
+
+
+def load_env():
+    # The same file the bash wrappers source, in set-secret's NAME='value' format.
+    env = {}
+    with open(ENV_FILE) as f:
+        for line in f:
+            name, sep, value = line.strip().partition("=")
+            if sep and not name.startswith("#"):
+                # Remove exactly the one pair of quotes set-secret wraps the value in, never a quote that is part of it.
+                if len(value) >= 2 and value[0] == value[-1] == "'":
+                    value = value[1:-1]
+                env[name] = value
+    return env
+
+
+def read_state():
+    seen_uids, seen_message_ids = set(), set()
+    try:
+        with open(STATE_FILE) as f:
+            for line in f:
+                row = json.loads(line)
+                seen_uids.add((row["uidvalidity"], row["uid"]))
+                # A rejected message's Message-ID claims nothing: Zach can drag it back to retry it, and a stranger
+                # cannot block a real message by sending a rejected one with its Message-ID first.
+                if row["message_id"] and row["outcome"] != "rejected":
+                    seen_message_ids.add(row["message_id"])
+    except FileNotFoundError:
+        pass
+    return seen_uids, seen_message_ids
+
+
+def record(uidvalidity, uid, message_id, outcome):
+    with open(STATE_FILE, "a") as f:
+        row = {"uidvalidity": uidvalidity, "uid": uid, "message_id": message_id, "outcome": outcome}
+        f.write(json.dumps(row | {"at": int(time.time())}) + "\n")
+
+
+def gate(msg, raw):
+    """Return None if the message may be read, or a fixed-string reason it may not.
+
+    Raises DnsUnavailable when DNS cannot answer, so a real message is retried rather than rejected.
+    """
+    try:
+        froms = msg.get_all("From") or []
+        if len(froms) != 1 or froms[0].defects or len(froms[0].addresses) != 1:
+            return "not exactly one From header with one address"
+        address = froms[0].addresses[0].addr_spec.lower()
+        if address not in ALLOWED_SENDERS:
+            return "sender not on the allowlist"
+
+        # Exactly one of each header the signature must cover. DKIM signs the last copy of a header, and Python
+        # reads the first, so a second copy added above a signed one would be read without being signed.
+        dates = msg.get_all("Date") or []
+        if len(dates) != 1 or dates[0].datetime is None:
+            return "not exactly one valid Date header"
+        sent_at = dates[0].datetime
+        if sent_at.tzinfo is None:
+            sent_at = sent_at.replace(tzinfo=UTC)  # "-0000" means UTC with no zone given
+        age = time.time() - sent_at.timestamp()
+        if age > MAX_AGE_SECONDS or age < -MAX_CLOCK_SKEW_SECONDS:
+            return "Date header is not within the last 48 hours"
+        recipient_header = header_naming(msg, IMAP_USER)
+        if recipient_header is None:
+            return "not addressed to Ichabod in one To or Cc header"
+
+        signed_headers = aligned_signature(raw, address.rpartition("@")[2])
+        if signed_headers is None:
+            return "DMARC did not pass with alignment"
+        # Without these, an old email Zach sent someone else could be re-sent to Ichabod with its signature intact.
+        if not {b"from", b"date", recipient_header.encode()} <= signed_headers:
+            return "signature does not cover From, Date and the recipient header"
+        return None
+    except DnsUnavailable:
+        raise
+    except Exception as e:  # noqa: BLE001 -- the stdlib and dkimpy parsers crash on some malformed messages
+        # A crash here would leave the message unread and block every message behind it, so it is rejected.
+        return f"message could not be parsed ({type(e).__name__})"
+
+
+def header_naming(msg, address):
+    """Return "to" or "cc", whichever names the address, or None. Either header appearing twice is None."""
+    tos, ccs = msg.get_all("To") or [], msg.get_all("Cc") or []
+    if len(tos) > 1 or len(ccs) > 1:
+        return None
+    for name, found in (("to", tos), ("cc", ccs)):
+        if found and address in {a.addr_spec.lower() for a in found[0].addresses}:
+            return name
+    return None
+
+
+def txt_records(name):
+    """The TXT strings at name, or [] when it has none. Raises DnsUnavailable when DNS could not answer."""
+    try:
+        answer = dns.resolver.resolve(name, "TXT")
+    except (dns.exception.Timeout, dns.resolver.NoNameservers, dns.resolver.NoResolverConfiguration):
+        raise DnsUnavailable from None
+    except dns.exception.DNSException:  # NXDOMAIN, no TXT answer, or a name that is not valid DNS
+        return []
+    return [b"".join(r.strings) for r in answer]
+
+
+def aligned_signature(raw, from_domain):
+    """Return the header names covered by a DKIM signature that verifies and aligns with from_domain, or None."""
+    # Verified here against the raw message, never read off the provider's Authentication-Results.
+    # SPF cannot be checked after delivery, so a pass means a DKIM signature that verifies and whose
+    # d= is exactly the From domain. That is strict alignment, stricter than DMARC's relaxed default.
+    if not any(r.startswith(b"v=DMARC1") for r in txt_records(f"_dmarc.{from_domain}")):
+        return None
+
+    def key_lookup(name, timeout=5):
+        # Only a key under the From domain can make a signature count, so a domain the sender picked is never queried.
+        # That also keeps a sender's slow nameserver from passing for an outage that holds the message unread.
+        try:
+            name = name.decode("ascii").lower()
+        except UnicodeDecodeError:
+            return None
+        if not name.endswith(f"._domainkey.{from_domain}."):
+            return None
+        records = txt_records(name)
+        return records[0] if records else None
+
+    try:
+        count = len(email.message_from_bytes(raw).get_all("DKIM-Signature") or [])
+    except Exception:  # noqa: BLE001 -- unparseable means unsigned
+        return None
+    for idx in range(count):
+        try:
+            d = dkim.DKIM(raw, minkey=1024)  # parses the message, and raises on a header line with no colon
+            if not d.verify(idx=idx, dnsfunc=key_lookup):
+                continue
+        except DnsUnavailable:
+            raise
+        except Exception:  # noqa: BLE001, S112 -- any failure to verify is a signature that does not count
+            continue
+        # l= signs only part of the body, so anything appended after it would ride on the signature.
+        aligned = d.domain.decode("ascii", "replace").lower() == from_domain
+        if aligned and b"l" not in d.signature_fields:
+            return set(d.include_headers)
+    return None
+
+
+def reader_input(msg):
+    try:
+        part = msg.get_body(preferencelist=("plain", "html"))
+        body = None if part is None else part.get_content()
+        subject = msg.get("Subject", "")
+    except Exception:  # noqa: BLE001 -- an unknown charset, bad encoding, or a header the stdlib parser crashes on
+        raise Quarantine("body or subject could not be decoded") from None
+    if body is None:
+        raise Quarantine("no text or HTML body")
+    if len(body) > MAX_BODY_CHARS:
+        raise Quarantine(f"body is over {MAX_BODY_CHARS} characters")
+    return f"Subject: {subject}\n\n{body}"
+
+
+def parse_reader_output(text):
+    # Models wrap JSON in fences, so strip one pair. Anything else unparseable is quarantined, not repaired.
+    text = text.strip()
+    fenced = re.fullmatch(r"```(?:json)?\s*\n(.*)\n```", text, flags=re.DOTALL)
+    if fenced:
+        text = fenced.group(1)
+
+    def no_duplicate_keys(pairs):
+        keys = [k for k, _ in pairs]
+        if len(keys) != len(set(keys)):
+            raise Quarantine("reader output repeats a key")
+        return dict(pairs)
+
+    try:
+        card = json.loads(text, object_pairs_hook=no_duplicate_keys)
+    except json.JSONDecodeError:
+        raise Quarantine("reader output is not JSON") from None
+    if not isinstance(card, dict) or set(card) != set(SCHEMA):
+        raise Quarantine("reader output does not have exactly the four fields")
+    for field, kind in SCHEMA.items():
+        if type(card[field]) is not kind:
+            raise Quarantine(f"reader field {field} has the wrong type")
+    for field, limit in MAX_FIELD_CHARS.items():
+        if not card[field].strip() or len(card[field]) > limit:
+            raise Quarantine(f"reader field {field} is empty or over {limit} characters")
+    return card
+
+
+def run_reader(msg, uid):
+    reader_text = reader_input(msg).encode()
+    # A bad parse gets one more try, since one-off garbage from the model is more likely than a bad email.
+    for attempt in (1, 2):
+        result = subprocess.run(
+            READER, input=reader_text, capture_output=True, timeout=READER_TIMEOUT_SECONDS, check=False
+        )
+        # A failed or timed-out pi is an outage, not a verdict: raise, leave the message unread, retry next run.
+        # A message that keeps failing ages past the 48-hour gate and is rejected.
+        if result.returncode != 0:
+            raise RuntimeError(f"pi exited {result.returncode}")
+        output = result.stdout.decode("utf-8", "replace")
+        try:
+            return parse_reader_output(output)
+        except Quarantine as q:
+            # By hand (MEMBRANE.md's tests), show what the reader printed. From cron, only the saved file has it.
+            if sys.stderr.isatty():
+                print(output, file=sys.stderr)
+            save_bad_output(uid, attempt, result)
+            if attempt == 2:
+                raise Quarantine(f"{q} on both tries; output saved in {BAD_OUTPUT_DIR}") from None
+
+
+def save_bad_output(uid, attempt, result):
+    # The filename is built from fixed parts only. stderr is kept too, since pi can print an error and still exit 0.
+    directory = pathlib.Path(BAD_OUTPUT_DIR)
+    directory.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    (directory / f"{stamp}-uid{uid}-try{attempt}.txt").write_bytes(
+        b"--- stdout ---\n" + result.stdout[:20_000] + b"\n--- stderr ---\n" + result.stderr[-20_000:]
+    )
+
+
+def file_card(card, address, message_id, date_header, received_at):
+    # Column and tags are fixed here. No column_id means the first column, which is triage.
+    received = datetime.fromtimestamp(received_at, UTC).isoformat(timespec="seconds")
+    description = "\n".join([
+        f"**From:** {address} (allowlisted, DMARC verified by receive-mail)",
+        f"**Message-ID:** {message_id or 'not given'}",
+        f"**Date header:** {date_header or 'not given'}",
+        f"**Received:** {received}",
+        f"**Original sender, per the reader:** {card['sender']}",
+        f"**Suspicious, per the reader:** {'yes' if card['suspicious'] else 'no'}",
+        "",
+        card["summary"],
+    ])  # fmt: skip
+    tags = ["email", "suspicious"] if card["suspicious"] else ["email"]
+    params = {"project_id": 1, "title": card["title"], "description": description, "tags": tags}
+    # An argument list, never a shell string: the card's text is data copied into fields.
+    try:
+        result = subprocess.run(
+            [f"{HOME}/bin/board", "createTask", json.dumps(params)], capture_output=True, check=True, timeout=60
+        )
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        # Re-raised without the original, whose message would carry the card text into log/.
+        raise RuntimeError("board createTask failed") from None
+    task_id = json.loads(result.stdout)
+    if not isinstance(task_id, int) or isinstance(task_id, bool) or task_id <= 0:
+        raise RuntimeError("board createTask did not return a task id")
+    return task_id
+
+
+def header_text(msg, name, limit=200):
+    # Headers receive-mail writes onto the card itself, flattened to one bounded line.
+    try:
+        value = str(msg.get(name, ""))
+    except Exception:  # noqa: BLE001 -- the stdlib parser crashes on some malformed headers, such as "<a@["
+        return ""
+    return " ".join(value.split())[:limit]
+
+
+def process(imap, uid, uidvalidity, seen_uids, seen_message_ids):
+    """Handle one unread message. Returns True if the reader was called, which counts toward MAX_READS_PER_RUN."""
+    _, date_data = imap.uid("FETCH", uid, "(INTERNALDATE)")
+    received_at = time.mktime(imaplib.Internaldate2tuple(date_data[0]))
+    _, body_data = imap.uid("FETCH", uid, "(BODY.PEEK[])")
+    raw = body_data[0][1]
+    msg = email.message_from_bytes(raw, policy=email.policy.default)
+    message_id = header_text(msg, "Message-ID")
+
+    # UIDs are per folder, so a filed message dragged back from Archive has a new one; Message-ID still matches.
+    if (uidvalidity, int(uid)) in seen_uids or (message_id and message_id in seen_message_ids):
+        imap.uid("STORE", uid, "+FLAGS", "(\\Seen)")
+        log(uid, "skipped", "already processed")
+        return False
+    seen_uids.add((uidvalidity, int(uid)))
+
+    # DnsUnavailable is not caught: like a failed reader, the message stays unread and the next run retries it.
+    reason = gate(msg, raw)
+    if reason:
+        imap.uid("MOVE", uid, REJECTED_FOLDER)
+        record(uidvalidity, int(uid), message_id, "rejected")
+        log(uid, "rejected", reason)
+        return False
+    # Claimed only once past the gate, so a second copy of the same Message-ID later in this run is skipped too.
+    if message_id:
+        seen_message_ids.add(message_id)
+
+    # Past the gate: from here on, the body is read, but only by the reader.
+    address = msg.get_all("From")[0].addresses[0].addr_spec.lower()
+    try:
+        card = run_reader(msg, uid)
+    except Quarantine as q:
+        imap.uid("MOVE", uid, QUARANTINE_FOLDER)
+        record(uidvalidity, int(uid), message_id, "quarantined")
+        log(uid, "quarantined", str(q))
+        tell_zach(
+            "receive-mail quarantined a message",
+            f"Message-ID: {message_id or 'not given'}\nReason: {q}\n\n"
+            f"It is in the {QUARANTINE_FOLDER} folder. Read it yourself; no card was made.\n",
+        )
+        return True
+
+    # Card first, then the record: a crash between them makes a duplicate card, never a lost request.
+    task_id = file_card(card, address, message_id, header_text(msg, "Date"), received_at)
+    record(uidvalidity, int(uid), message_id, "filed")
+    # The card is now the record of the request, so the message leaves the inbox and nothing else needs IMAP.
+    imap.uid("MOVE", uid, ARCHIVE_FOLDER)
+    log(uid, "filed", f"task={task_id}{' suspicious' if card['suspicious'] else ''}")
+    return True
+
+
+def login_alert_due(now):
+    try:
+        return now - pathlib.Path(LOGIN_ALERT_FILE).stat().st_mtime >= LOGIN_ALERT_EVERY_SECONDS
+    except FileNotFoundError:
+        return True
+
+
+def main():
+    # One receive-mail at a time, so a slow reader call cannot overlap the next run and take the same message.
+    lock = open(LOCK_FILE, "w")  # noqa: SIM115 -- held open for the whole run; closing it releases the lock
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        log("-", "skipped", "previous receive-mail still running")
+        return 0
+
+    # Fail closed and loud: a mailbox that cannot be opened must never look like a quiet day.
+    try:
+        password = load_env().get("MAIL_PASSWORD", "")
+        if not password:
+            raise ValueError("MAIL_PASSWORD is empty or missing")
+        imap = imaplib.IMAP4_SSL(IMAP_HOST, timeout=60)
+        imap.login(IMAP_USER, password)
+    except (OSError, ValueError, imaplib.IMAP4.error) as e:
+        # Only the exception type: an IMAP error can echo what was sent.
+        log("-", "error", f"mailbox did not open: {type(e).__name__}")
+        if login_alert_due(time.time()):
+            tell_zach(
+                "receive-mail cannot open the mailbox",
+                f"receive-mail could not log in to {IMAP_USER} ({type(e).__name__}). No mail is being read.\n"
+                "If the app password is wrong or revoked, set a new one with: make secret NAME=MAIL_PASSWORD\n"
+                "You will get this email again in 24 hours if it is still broken.\n",
+            )
+            pathlib.Path(LOGIN_ALERT_FILE).touch()
+        return 1
+    # Logged in, so the next failure is news again.
+    pathlib.Path(LOGIN_ALERT_FILE).unlink(missing_ok=True)
+
+    try:
+        for folder in (REJECTED_FOLDER, QUARANTINE_FOLDER, ARCHIVE_FOLDER):
+            imap.create(folder)  # NO when it already exists, which is fine
+        imap.select("INBOX")
+        uidvalidity = int(imap.response("UIDVALIDITY")[1][0])
+        _, data = imap.uid("SEARCH", "UNSEEN")
+        seen_uids, seen_message_ids = read_state()
+        reads = 0
+        for uid in data[0].split():
+            if reads == MAX_READS_PER_RUN:
+                log("-", "stopped", f"reader called {MAX_READS_PER_RUN} times; the rest wait for the next run")
+                break
+            if process(imap, uid.decode(), uidvalidity, seen_uids, seen_message_ids):
+                reads += 1
+    finally:
+        imap.logout()
+    pathlib.Path(OK_FILE).touch()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

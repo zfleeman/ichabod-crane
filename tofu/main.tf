@@ -37,6 +37,11 @@ data "aws_route53_zone" "ichabod" {
   name = "ichabod-crane.net"
 }
 
+# Zach's personal zone, also created by hand. Read only for the board record below.
+data "aws_route53_zone" "zfleeman" {
+  name = "zfleeman.com"
+}
+
 # --- Network -----------------------------------------------------------------
 
 resource "aws_security_group" "ichabod" {
@@ -172,6 +177,54 @@ resource "aws_eip_association" "ichabod" {
   allocation_id = aws_eip.ichabod.id
 }
 
+# --- Backups -----------------------------------------------------------------
+
+# Data Lifecycle Manager takes the snapshots from outside the box, so nothing on it can stop or delete them.
+resource "aws_iam_role" "dlm" {
+  name = "ichabod-dlm"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Action    = "sts:AssumeRole"
+      Principal = { Service = "dlm.amazonaws.com" }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "dlm" {
+  role       = aws_iam_role.dlm.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSDataLifecycleManagerServiceRole"
+}
+
+# Snapshots every volume on the instance tagged Name=ichabod each day at 09:00 UTC, and keeps the last seven.
+resource "aws_dlm_lifecycle_policy" "ichabod" {
+  description        = "ichabod daily snapshots"
+  execution_role_arn = aws_iam_role.dlm.arn
+  state              = "ENABLED"
+
+  policy_details {
+    resource_types = ["INSTANCE"]
+    target_tags    = { Name = "ichabod" }
+
+    schedule {
+      name      = "daily"
+      copy_tags = true
+
+      create_rule {
+        interval      = 24
+        interval_unit = "HOURS"
+        times         = ["09:00"]
+      }
+
+      retain_rule {
+        count = 7
+      }
+    }
+  }
+}
+
 # --- DNS ---------------------------------------------------------------------
 
 # Both records are required: a wildcard does not answer for the apex.
@@ -189,6 +242,16 @@ resource "aws_route53_record" "wildcard" {
   type    = "A"
   ttl     = 300
   records = [aws_eip.ichabod.public_ip]
+}
+
+# The board runs on Zach's Synology, not on this box. Only this record is managed
+# here; the rest of the zfleeman.com zone is kept by hand.
+resource "aws_route53_record" "board" {
+  zone_id = data.aws_route53_zone.zfleeman.zone_id
+  name    = "ichabod-board.zfleeman.com"
+  type    = "CNAME"
+  ttl     = 300
+  records = ["zfleeman.synology.me"]
 }
 
 # Mail, all of it Fastmail's. These were created by hand in the console during
@@ -297,9 +360,9 @@ resource "aws_cloudwatch_metric_alarm" "ebs_byte_balance_low" {
   alarm_actions       = [aws_sns_topic.alerts.arn]
 }
 
-# The three CWAgent alarms sit in INSUFFICIENT_DATA until section 2 installs the
-# agent. Configure it to collect only "/" and to aggregate on InstanceId, or these
-# dimensions will not match.
+# The three CWAgent alarms sit in INSUFFICIENT_DATA until the host installs the
+# agent (docs/ICHABOD-GUIDE.md, section 5). Configure it to collect only "/" and
+# to aggregate on InstanceId, or these dimensions will not match.
 resource "aws_cloudwatch_metric_alarm" "memory_high" {
   alarm_name          = "ichabod-memory-high"
   alarm_description   = "Memory above 85 percent."
@@ -340,6 +403,36 @@ resource "aws_cloudwatch_metric_alarm" "disk_urgent" {
   comparison_operator = "GreaterThanThreshold"
   dimensions          = { InstanceId = aws_instance.ichabod.id }
   alarm_actions       = [aws_sns_topic.alerts.arn]
+}
+
+# One alarm per scheduled job in home/crontab. Each job touches a marker on success, and home/bin/health
+# publishes it as a heartbeat once an hour, so an alarm can fire up to an hour after its limit. Mail can be
+# what broke, so these shout through SNS instead: a dead box, a stopped cron, a broken health or broken mail
+# all arrive as missing data.
+# The value is how many hours a job may go without a success, about three missed runs; change it with the
+# crontab. A job still commented out in the crontab sits in ALARM until its line is enabled.
+resource "aws_cloudwatch_metric_alarm" "heartbeat" {
+  for_each = {
+    receive-mail = 2
+    usage        = 3
+    work         = 3
+    scout        = 6
+    digest       = 26
+  }
+
+  alarm_name          = "ichabod-heartbeat-${each.key}"
+  alarm_description   = "No successful ${each.key} run for ${each.value} hours."
+  namespace           = "ichabod"
+  metric_name         = "Heartbeat"
+  statistic           = "Sum"
+  period              = 3600
+  evaluation_periods  = each.value
+  threshold           = 1
+  comparison_operator = "LessThanThreshold"
+  treat_missing_data  = "breaching"
+  dimensions          = { Job = each.key }
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
 }
 
 # Expected spend is roughly $67 a month, so $80 leaves headroom before it fires.

@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# board <method> [json-params]   one Kanboard JSON-RPC call, printing .result
+#   e.g. board getAllTasks '{"project_id":1,"status_id":1}'
+# Sources the env file itself so Zach can run it by hand and see what the agent sees.
+set -euo pipefail
+set -a; . /home/ichabod/.config/ichabod/env; set +a
+params="${2:-"{}"}"
+curl -sS --fail -u "ichabod:$KANBOARD_TOKEN" "$KANBOARD_URL/jsonrpc.php" \
+  -d "$(jq -cn --arg m "$1" --argjson p "$params" '{jsonrpc: "2.0", id: 1, method: $m, params: $p}')" |
+  jq '.result'

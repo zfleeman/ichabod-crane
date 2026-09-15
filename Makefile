@@ -12,7 +12,6 @@ export AWS_PAGER =
 
 # Recursive assignment on purpose: `make help` should not need a built instance.
 INSTANCE_ID = $(shell tofu -chdir=tofu output -raw instance_id)
-GATEWAY_PORT = 18789
 
 .DEFAULT_GOAL := help
 
@@ -26,49 +25,26 @@ check: ## Formatting and validation
 	tofu -chdir=tofu fmt -check
 	tofu -chdir=tofu validate
 
+# Runs on the laptop. The scripts have no .py or .sh extension, so each tool is pointed at them by name.
+test: ## Lint and unit test the scripts in home/bin
+	ruff check
+	ruff format --check
+	uvx --from shellcheck-py shellcheck -e SC1091 home/bin/run home/bin/board home/bin/usage home/bin/health home/bin/set-secret scripts/deploy scripts/install-home
+	uv run --group dev pytest -q
+
 plan: ## Show what would change
 	tofu -chdir=tofu plan
 
 apply: ## Build or update the infrastructure
 	tofu -chdir=tofu apply
 
-# The box's state, as this repo declares it. Order is not cosmetic: a scheduled
-# job names the agent that owns it, and configure-automations reads the prompt
-# files off the box rather than out of the checkout. Every script here is
-# idempotent, so rerunning sync is the way back to a known box.
-sync: ## Push agents, workspace and scheduled passes to the box
-	scripts/configure-agents
-	scripts/deploy-workspace
-	scripts/configure-automations
-
-# Kept out of sync: this one needs IMAP_PASSWORD in the secret store, and it
-# leaves a timestamped openclaw.json backup on the box every run.
-imap: ## Write the IMAP intake config (needs IMAP_PASSWORD)
-	scripts/configure-imap
-
-# Also kept out of sync: install-plugin ships built output, and building it
-# needs an `openclaw` CLI on this laptop. The script says so if dist/ is stale.
-plugins: ## Install all three plugins from their built dist/
-	@for p in mailbox smtp-send triage-guard; do \
-	  echo "== $$p"; \
-	  scripts/install-plugin $$p || exit 1; \
-	done
-
-sandbox-image: ## Rebuild the Docker image agents are sandboxed in
-	scripts/build-sandbox-image
-
 shell: ## Interactive shell on the box, as ssm-user
 	aws ssm start-session --target $(INSTANCE_ID)
 
-openclaw: ## Shell as the openclaw service account
+ichabod: ## Interactive login shell on the box, as ichabod
 	aws ssm start-session --target $(INSTANCE_ID) \
 	  --document-name AWS-StartInteractiveCommand \
-	  --parameters command="sudo -iu openclaw"
-
-ui: ## Forward the Gateway to http://127.0.0.1:18789
-	aws ssm start-session --target $(INSTANCE_ID) \
-	  --document-name AWS-StartPortForwardingSession \
-	  --parameters '{"portNumber":["$(GATEWAY_PORT)"],"localPortNumber":["$(GATEWAY_PORT)"]}'
+	  --parameters command="sudo -iu ichabod"
 
 # Two separate questions with one answer: EC2 knows whether the machine is on,
 # SSM knows whether it is reachable. A running box whose agent is dead shows as
@@ -108,6 +84,25 @@ start: ## Start the instance and wait until SSM answers
 	  done; \
 	  echo "SSM never came online; check the console in the EC2 web UI." >&2; exit 1
 
+# Ships the committed home/ to /home/ichabod. Refuses when Ichabod changed a shipped file on the
+# box since the last deploy; FORCE=1 overwrites. scripts/install-home has the rules.
+deploy: ## Install the committed home/ on the box (FORCE=1 overwrites drift)
+	FORCE=$(or $(FORCE),0) scripts/deploy
+
+# Separate from deploy on purpose: a deploy must never re-enable passes a kill switch turned off.
+cron: ## Install home/crontab as the live schedule, /etc/cron.d/ichabod-schedule
+	aws ssm start-session --target $(INSTANCE_ID) \
+	  --document-name AWS-StartInteractiveCommand \
+	  --parameters command="sudo install -o root -g root -m 0644 /home/ichabod/crontab /etc/cron.d/ichabod-schedule && cat /etc/cron.d/ichabod-schedule"
+
+# The value is typed into the session with echo off, so it never lands on a command line, in shell
+# history, or in SSM's command history. Only the name travels as a parameter.
+secret: ## Set one secret on the box: make secret NAME=KANBOARD_TOKEN
+	@echo "$(NAME)" | grep -Eq '^[A-Z][A-Z0-9_]*$$' || { echo "usage: make secret NAME=KANBOARD_TOKEN" >&2; exit 2; }
+	aws ssm start-session --target $(INSTANCE_ID) \
+	  --document-name AWS-StartInteractiveCommand \
+	  --parameters command="sudo -u ichabod /home/ichabod/bin/set-secret $(NAME)"
+
 ip: ## Print the Elastic IP
 	@tofu -chdir=tofu output -raw public_ip; echo
 
@@ -115,4 +110,4 @@ alarms: ## Current state of every ichabod alarm
 	aws cloudwatch describe-alarms --alarm-name-prefix ichabod- \
 	  --query 'MetricAlarms[].[AlarmName,StateValue]' --output table
 
-.PHONY: help init check plan apply sync imap plugins sandbox-image shell openclaw ui status stop start ip alarms
+.PHONY: help init check test plan apply shell ichabod status stop start deploy cron secret ip alarms

@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# health   publish one CloudWatch heartbeat for each job that succeeded since the last health run.
+# Jobs mark success by touching .local/state/<job>.ok. The alarms in tofu/main.tf decide how long a
+# job may go without a heartbeat, so a dead box, a stopped cron, broken mail or a broken health all alarm.
+set -euo pipefail
+state=/home/ichabod/.local/state
+stamp="$state/health.stamp"
+[ -f "$stamp" ] || touch -t 197001010000 "$stamp"
+
+# Stamp before looking: a success that lands mid-run is sent again next time rather than lost.
+touch "$stamp.new"
+while IFS= read -r ok; do
+  aws cloudwatch put-metric-data --region us-east-2 --namespace ichabod --metric-name Heartbeat \
+    --dimensions "Job=$(basename "$ok" .ok)" --value 1
+done < <(find "$state" -maxdepth 1 -name '*.ok' -newer "$stamp")
+# Only advanced when every put succeeded, so a failed put is retried on the next run.
+mv "$stamp.new" "$stamp"

@@ -1,6 +1,0 @@
-{
-  "theme": "dark",
-  "permissions": {
-    "deny": ["Agent", "AskUserQuestion", "ListAgents", "ReportFindings"]
-  }
-}

@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# usage   one JSON line: ChatGPT Plus 5-hour and weekly percent used, and when the week resets.
+# Calls the undocumented endpoint Pi's Codex usage extensions use, with Pi's own login.
+# Pi refreshes that login when it runs, so this only fails on an expired token if Pi hasn't run in about ten days.
+set -euo pipefail
+token="$(jq -r '."openai-codex".access' "${PI_CODING_AGENT_DIR:-/home/ichabod/.pi/agent}/auth.json")"
+curl -sS --fail -H "Authorization: Bearer $token" https://chatgpt.com/backend-api/wham/usage |
+  jq -c '{at: (now | todate), limit_reached: .rate_limit.limit_reached,
+          five_hour: .rate_limit.primary_window.used_percent,
+          weekly: .rate_limit.secondary_window.used_percent,
+          weekly_resets: (.rate_limit.secondary_window.reset_at | todate)}'
+# health turns this into a CloudWatch heartbeat.
+touch /home/ichabod/.local/state/usage.ok

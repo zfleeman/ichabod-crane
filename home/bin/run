@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# run <name> <model>   run prompts/<name>.md under pi on <model>, with a lock and a timeout.
+# Cron runs this. docs/RUNTIME.md has the reasoning behind Pi's flags; the rest is explained inline.
+set -euo pipefail
+# The model is an argument so each crontab line holds its pass's schedule and model together.
+name="$1"; model="$2"
+set -a; . /home/ichabod/.config/ichabod/env; set +a
+mkdir -p /home/ichabod/.local/state
+
+# One run of each pass at a time. The lock comes first, so a skipped run quits before it has made a log or a cost line.
+exec 9> "/home/ichabod/.local/state/$name.lock"
+if ! flock -n 9; then
+  echo "$(date +%FT%T%z) run: $name skipped, the previous run is still going" >&2
+  exit 0
+fi
+
+day="$(date +%F)"; out="/home/ichabod/log/$day/$(date +%H%M)-$name.jsonl"; err="${out%.jsonl}.stderr"
+mkdir -p "/home/ichabod/log/$day" /home/ichabod/workspace/own-skills
+
+# Pi has no working-directory flag; it reads AGENTS.md from the directory it starts in.
+cd /home/ichabod/workspace
+
+# --no-skills plus --skill loads exactly Zach's skills and Ichabod's own, without depending on project trust.
+# --no-extensions because an extension can add tools and preamble; -e still loads pi-web-access, root-owned in /usr/lib.
+# Re-check --tools after every Pi or pi-web-access upgrade: a tool can keep its name and change what it does.
+# MEMORY.md is appended to the system prompt, so every pass starts with it rather than deciding whether to read it.
+# 9>&- keeps the lock out of pi, so a process Ichabod leaves running in the background cannot hold it forever.
+# pi's stderr gets a file beside its log, so passes running at once never mix their output in log/run.log.
+# rc is pi's exit code, kept so a failed pass still gets its cost line before this script exits with it.
+# timeout recovers a hung pass; its log up to the kill survives. On SIGTERM pi kills its running bash
+# tool calls itself, and --kill-after covers a pi that hangs on the way out.
+rc=0
+timeout --kill-after=60 1800 \
+  pi --mode json --no-session --model "$model" \
+     --tools read,write,edit,bash,web_search,fetch_content,get_search_content \
+     --no-extensions -e /usr/lib/node_modules/pi-web-access \
+     --no-skills --skill /home/ichabod/workspace/skills --skill /home/ichabod/workspace/own-skills \
+     --append-system-prompt /home/ichabod/workspace/MEMORY.md \
+     @"/home/ichabod/prompts/$name.md" > "$out" 2> "$err" 9>&- || rc=$?
+# Most runs print nothing there, and an empty file is only clutter.
+[ -s "$err" ] || rm -f "$err"
+
+# Tokens per run, one line per pass, summed over the model's replies. preamble is the first reply's input:
+# everything the model was handed before it acted. input excludes cache_read, so add them for the true size.
+# A crashed pi can leave a log that is not JSON; say so rather than let set -e replace pi's exit code with jq's.
+stop=unknown
+if cost="$(jq -cs --arg pass "$name" '
+    [.[] | select(.type == "message_end" and .message.role == "assistant") | .message] |
+    {at: (now | todate), pass: $pass, model: last.model, replies: length,
+     preamble: (first.usage | .input + .cacheRead),
+     input: (map(.usage.input) | add), cache_read: (map(.usage.cacheRead) | add),
+     output: (map(.usage.output) | add), stop: (last.stopReason // "none")}' "$out")"; then
+  echo "$cost" >> /home/ichabod/log/cost.jsonl
+  stop="$(jq -r .stop <<< "$cost")"
+else
+  echo "$(date +%FT%T%z) run: no cost line for $name, $out is not JSON" >&2
+fi
+
+# --mode json exits 0 even when the model call failed, so only a last reply that ended normally is a success.
+if [ "$rc" = 0 ] && [ "$stop" != stop ]; then
+  echo "$(date +%FT%T%z) run: $name ended with stopReason $stop" >&2
+  rc=1
+fi
+
+# health turns this into a CloudWatch heartbeat.
+if [ "$rc" = 0 ]; then touch "/home/ichabod/.local/state/$name.ok"; fi
+
+exit $rc
