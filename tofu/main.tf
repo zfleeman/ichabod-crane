@@ -177,6 +177,54 @@ resource "aws_eip_association" "ichabod" {
   allocation_id = aws_eip.ichabod.id
 }
 
+# --- Backups -----------------------------------------------------------------
+
+# Data Lifecycle Manager takes the snapshots from outside the box, so nothing on it can stop or delete them.
+resource "aws_iam_role" "dlm" {
+  name = "ichabod-dlm"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Action    = "sts:AssumeRole"
+      Principal = { Service = "dlm.amazonaws.com" }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "dlm" {
+  role       = aws_iam_role.dlm.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSDataLifecycleManagerServiceRole"
+}
+
+# Snapshots every volume on the instance tagged Name=ichabod each day at 09:00 UTC, and keeps the last seven.
+resource "aws_dlm_lifecycle_policy" "ichabod" {
+  description        = "ichabod daily snapshots"
+  execution_role_arn = aws_iam_role.dlm.arn
+  state              = "ENABLED"
+
+  policy_details {
+    resource_types = ["INSTANCE"]
+    target_tags    = { Name = "ichabod" }
+
+    schedule {
+      name      = "daily"
+      copy_tags = true
+
+      create_rule {
+        interval      = 24
+        interval_unit = "HOURS"
+        times         = ["09:00"]
+      }
+
+      retain_rule {
+        count = 7
+      }
+    }
+  }
+}
+
 # --- DNS ---------------------------------------------------------------------
 
 # Both records are required: a wildcard does not answer for the apex.

@@ -195,7 +195,7 @@ The acceptance test for the whole system is one sentence: email Ichabod a small 
 
 1. **GitHub** — source for every valuable project.
 2. **Application-native** — dumps or volume archives, per the app's README.
-3. **EBS snapshots** — whole-machine recovery, on a lifecycle policy owned by Zach's AWS account and never touched from the box.
+3. **EBS snapshots** — whole-machine recovery, on the lifecycle policy in `tofu/`, run by AWS and never touched from the box.
 
 The workspace (`MEMORY.md`, `memory/`, `own-skills/`) has no backup of its own and lives only on the box and its snapshots. Kanboard's data lives on the Synology, off the box.
 
