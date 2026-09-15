@@ -5,8 +5,8 @@ PATH=/home/ichabod/bin:/home/ichabod/.local/bin:/usr/local/bin:/usr/bin:/bin
 
 */30 * * * *     ichabod  /home/ichabod/bin/receive-mail >> /home/ichabod/log/receive-mail.log 2>&1
 0 * * * *        ichabod  /home/ichabod/bin/usage >> /home/ichabod/log/usage.jsonl
-# work runs at five past, so receive-mail and usage have usually finished what they started on the hour.
-5 * * * *        ichabod  /home/ichabod/bin/run work openai-codex/gpt-5.6-terra >> /home/ichabod/log/run.log 2>&1
+# work runs at five and thirty-five past, so receive-mail and usage have usually finished what they started. A run still going skips the next.
+5,35 * * * *     ichabod  /home/ichabod/bin/run work openai-codex/gpt-5.6-terra >> /home/ichabod/log/run.log 2>&1
 # read-feeds runs at twenty past, between receive-mail's runs, and scout picks up its themes on the next even hour.
 20 */12 * * *    ichabod  /home/ichabod/bin/read-feeds >> /home/ichabod/log/read-feeds.log 2>&1
 0 */2 * * *      ichabod  /home/ichabod/bin/run scout openai-codex/gpt-5.6-luna >> /home/ichabod/log/run.log 2>&1
