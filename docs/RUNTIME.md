@@ -18,7 +18,7 @@ Each pass is one prompt file in `home/prompts/`, run by `run` from cron. The pro
 
 **Reasoning goes on the card as a comment.** The board is both the queue and the record, so the journal only holds what does not belong to a card.
 
-**`route` and `work` are separate passes because they run on different models.** Pi takes one `--model` per run, so a single "read the board, do the next thing" loop would route and build on the same model. Merge them only if one model turns out to be right for both.
+**One `work` pass triages and builds.** It tidies the board, writes acceptance criteria for new cards, and then works one card, all in one run. A card filed by email can start within the hour, every rule about the board is written once, and an hour costs one preamble instead of two. The price is that triage runs on the build model, and the housekeeping comes out of the same 30-minute timeout.
 
 ## Memory
 
@@ -58,7 +58,7 @@ Ichabod is root-equivalent and could publish a fake heartbeat. That is accepted,
 
 Ichabod runs on OpenAI models through a ChatGPT Plus subscription on his own account, logged in with Pi. The bill is flat, so the real limit is the subscription's 5-hour and weekly usage windows.
 
-**A mid-tier model builds; the small tier does everything else.** Zach chose this to stretch the Plus allowance. Triage is a judgment call on text an attacker can influence, so watch `route`'s decisions first if the small tier is not good enough. Each pass's model is the second argument on its crontab line, and the membrane's is in `receive-mail`.
+**A mid-tier model runs `work`; the small tier does everything else.** Zach chose this to stretch the Plus allowance. Triage happens inside `work`, so it gets the mid-tier model too. Each pass's model is the second argument on its crontab line, and the membrane's is in `receive-mail`.
 
 **Two numbers stand in for the usage page**, which nothing on the box can read. `run` records tokens per run in `log/cost.jsonl`, which shows how hard each run worked. `usage` records percent of the allowance used in `log/usage.jsonl`, which shows how much room is left. `usage` calls an undocumented endpoint, so it fails loudly and its heartbeat stops when the endpoint changes, rather than leaving a quiet gap in the log.
 
@@ -86,6 +86,7 @@ Ichabod runs on OpenAI models through a ChatGPT Plus subscription on his own acc
 ## Trade-offs this design accepts
 
 - **No model fallback.** A provider outage fails the pass, and the next scheduled run tries again.
+- **No second gate between triage and work.** The run that decides a card is in bounds is the run that starts it, so a card that talks the model into scope meets no separate check. Card text is treated as data, and the membrane marks steering emails `suspicious`, so this is a thinner layer, not the only one.
 - **No dashboard.** Kanboard shows the board, and everything else is `jq` over `log/`. If that gets old, switch to `--session-dir` and `pi --export` turns any run into a web page.
 - **Shell and Python instead of typed plugins.** Easier to read, and easier to get subtly wrong.
 - **A new pass is a prompt file and a cron line.** Smaller, and less interesting, than a multi-agent framework.
