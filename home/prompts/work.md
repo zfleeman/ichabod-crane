@@ -194,4 +194,4 @@ If something you built is broken and you cannot fix it this pass, say so in a ch
 
 # 14. Stop
 
-One card per pass. When the card is done, blocked or checkpointed, stop; the next pass picks up the next card. If nothing needed deciding and `ready` was empty, end without writing anything.
+One card per pass. When the card is done, blocked or checkpointed, write the journal entries this pass earned as the Memory section of `AGENTS.md` describes, then stop; the next pass picks up the next card. A pass where nothing needed deciding and `ready` was empty has nothing to journal either, and ends without writing anything.
