@@ -143,7 +143,7 @@ From the laptop, which needs `brew install --cask session-manager-plugin` once:
 
 1. `make init` and `make apply`. Click the confirmation link in the SNS email, or every alarm stays silent.
 2. `make build-host`. It installs packages, Docker, Pi and the CloudWatch agent, turns SSH off, sets up `ichabod`'s signing key, checks the result, and prints the public key.
-3. Add that key to `ich4bod` twice, once as an Authentication Key and once as a Signing Key.
+3. Add that key to `ich4bod` twice, once as an Authentication Key and once as a Signing Key. While you are in that account, create the fine-grained token `GH_TOKEN` holds, with repository access **All repositories** and **Administration: Read and write**; [`env.example`](home/.config/ichabod/env.example) says what breaks without it.
 4. `make deploy`, then `make secret NAME=<name>` for each name in [`env.example`](home/.config/ichabod/env.example). The value is typed with echo off, so it stays out of shell history and SSM's command history. Do not open the env file in an editor over `make shell`: Session Manager logging records the screen.
 5. The ChatGPT login is the one secret not in that file. `make ichabod`, run `pi`, type `/login`, and choose ChatGPT Plus/Pro (Codex) with the device code option. Pi refreshes the token itself.
 6. In the same session, start Traefik once: `cd ~/platform/traefik && docker compose up -d`. It creates the network every application joins.
